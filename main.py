@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import os
 
-number_of_photos = 2000
+number_of_photos = 10
 number_of_people = 4
 
 def take_photos():
@@ -39,8 +39,9 @@ def take_photos():
 # This is also used in normal distribution!
 def standardization(img):
     img_size = img.shape
-    sum = 0
-    squared_sum = 0
+    img = img.astype(np.float64) # Higher precision to reduce rounding error
+    sum = 0.0
+    squared_sum = 0.0
     number_of_pixels = img.shape[0] * img.shape[1]
     # Define an empty 2D matrix with the same shape as the original, unstandardized greyscale image
     std_img = np.zeros_like(img)
@@ -85,20 +86,21 @@ def five_by_five(input_matrix):
 # REMEMBER, this is ONE LAYER FOR ALL PHOTOS
 class logistic_regression():
     def __init__(self, x):
-        self.x = x
+        self.x = x # 4D array, 0 = image of person, 1 = number of 5x5 rows, 2 = number of 5x5 columns, 3 = number of pixels in 5x5 (25)
         self.x_shape = x.shape
-        self.w = np.ones(self.x_shape[1]) # One W for each (5x5) area of an image
-        self.b = np.ones(self.x_shape[1])
-        self.sigmoid = np.zeros(self.x_shape[1]) # For one whole image
-        self.all_sigmoid = np.zeros((self.x_shape[0], self.x_shape[1])) # 2D array containing sigmoid of all areas of all images
-        self.cost = np.ones(self.x_shape[1])
+        self.w = np.ones((self.x_shape[1], self.x_shape[2])) # 2D array, One W for each (5x5) area of an image
+        self.b = np.ones((self.x_shape[1], self.x_shape[2]))
+        self.sigmoid = np.zeros((self.x_shape[1], self.x_shape[2])) # For one whole image
+        self.all_sigmoid = np.zeros((self.x_shape[0], self.x_shape[1], self.x_shape[2])) # 3D array containing sigmoid of all areas of all images
+        self.cost = np.ones((self.x_shape[1], self.x_shape[2]))
         self.alpha = 0.0001
 
     def forward_prop(self):
         # Calculate the total sigmoid of one image, and then concatenate sigmoid of all of the images at the end.
         for i in range (self.x_shape[0]): # Loop through all images
-            for j in range(self.x_shape[1]): # For all areas of one image
-                self.sigmoid[j] = 1 / (1 + np.e ** (-(np.dot(self.x[i][j], self.w[j]) + self.b[j])))
+            for j in range(self.x_shape[1]): # For all row boxes of one image
+                for k in range(self.x_shape[2]): # For all column boxes of one image
+                    self.sigmoid[j][k] = 1 / (1 + np.e ** (-(self.w[j][k] * sum(self.x[i][j][k]) + self.b[j][k])))
 
             self.all_sigmoid[i] = self.sigmoid
 
@@ -108,20 +110,23 @@ class logistic_regression():
     def back_prop(self, prev_d):
         # Prev_d is a 1D array for all areas of the image
         self.forward_prop()
-        current_d = []
+        current_d = [[[0 for _ in range(self.x_shape[2] * 5)] for _ in range(self.x_shape[1] * 5)] for _ in range(self.x_shape[0])]
         for i in range(self.x_shape[0]): # For all images
-            for j in range(self.x_shape[1]): # For each area of an image
-                total_x = 0
-                for k in range(self.x_shape[2]): # Find the average value that the current w changes the final result.
-                    total_x += self.x[i][j][k]
+            for j in range(self.x_shape[1]): # For each 5x5 row of an image
+                for k in range(self.x_shape[2]): # For each 5x5 column of an image
+                    total_x = 0
+                    for l in range(self.x_shape[3]): # Find the average value that the current w changes the final result.
+                        total_x += self.x[i][j][k][l]
 
-                self.w[j] -= self.alpha * prev_d[j] * self.sigmoid[i][j] * (1 - self.sigmoid[i][j]) * (total_x/self.x_shape[2])
-                self.b[j] -= self.alpha * prev_d[j] * self.sigmoid[i][j] * (1 - self.sigmoid[i][j])
-                # Iteration to create new 5x5 areas with repeating current_d
-                # Current_d will be a 2D matrix, local to the image
-                for z in range(25):
-                    current_d.append([prev_d[j] * self.sigmoid[i][j] * (1 - self.sigmoid[i][j])])
-
+                    self.w[j][k] -= self.alpha * prev_d[i][j][k] * self.sigmoid[i][j][k] * (1 - self.sigmoid[i][j][k]) * (total_x/self.x_shape[3])
+                    self.b[j][k] -= self.alpha * prev_d[i][j][k] * self.sigmoid[i][j][k] * (1 - self.sigmoid[i][j][k])
+                    # Iteration to create new 5x5 areas with repeating current_d
+                    # Current_d will be a 3D matrix, unique for each image
+                    for y in range(5):
+                        for z in range(5):
+                            current_d[i][5*j+y][5*k+z] = ([prev_d[j][k] * self.sigmoid[i][j][k] * (1 - self.sigmoid[i][j][k])])
+                            # There is a photo in your icloud if you forgot how this works
+        current_d = np.array(current_d)
         return current_d
 
 
@@ -130,25 +135,30 @@ class softmax():
         self.x = x
         self.y = y # Integer value for index of each face/a face, starting from ZERO!!!
         self.x_shape = x.shape
-        self.w = np.ones(self.x_shape[1])
-        self.b = np.ones(self.x_shape[1])
-        self.softmax = np.zeros(self.x_shape[1])  # For one whole image
-        self.all_softmax = np.zeros((self.x_shape[0], self.x_shape[1]))  # 2D array containing sigmoid of all areas of all images
+        self.w = np.ones((self.x_shape[1], self.x_shape[2]))
+        self.b = np.ones((self.x_shape[1], self.x_shape[2]))
+        self.softmax = np.zeros((self.x_shape[1], self.x_shape[2]))  # For one whole image
+        self.all_softmax = [] # 3D array containing softmax of all areas of all images
         self.alpha = 0.0001
 
     def forward_prop(self):
-        func = np.zeros((self.x_shape[0], self.x_shape[1])) # 2D array containing all areas of all images
+        func = np.zeros((self.x_shape[0], self.x_shape[1], self.x_shape[2])) # 3D array containing all areas of all images
         for i in range (self.x_shape[0]): # Loop through all images
-            for j in range(self.x_shape[1]): # For all areas of one image
-                func[i][j] = np.dot(self.w[j], self.x[i][j]) + self.b[j]
-                self.softmax[j] = (np.e ** func[i][j]) / np.dot(np.e ** func[i])
+            func_sum = 0
+            for k in range(self.x_shape[1]):  # For sum of functions of all rows
+                for a in range(self.x_shape[2]): # For sum of functions of all columns
+                    func_sum += np.e ** (self.w[k][a] * sum(self.x[i][k][a]) + self.b[k][a]) # Function for one area
+            for j in range(self.x_shape[1]): # For each row
+                for b in range(self.x_shape[2]): # For each column
+                    func[i][j][b] = self.w[j][b] * sum(self.x[i][j][b]) + self.b[j][b] # Function for one area
+                    self.softmax[j][b] = (np.e ** func[i][j][b]) / func_sum
 
-            self.all_softmax[i] = self.softmax
+            self.all_softmax.append(self.softmax)
 
+        self.all_softmax = np.array(self.all_softmax)
         return self.all_softmax
 
     def cost(self):
-        self.forward_prop()
         loss = 0
         for i in range(self.x_shape[0]):
             loss += -np.log(self.all_softmax[self.y])
@@ -157,13 +167,12 @@ class softmax():
         return cost
 
     def gradient_descent(self):
-        self.forward_prop()
         for i in range(self.x_shape[0]):
             # Line below is to make the gradient of the loss of the actual value negative whilst keeping others positive
             # So it reduces the weight for wrong predictions but increase the weight for right predictions later on...
             self.all_softmax[i][self.y] -= 1
 
-            for j in range(self.x_shape[1]):
+            for j in range(self.x_shape[1] * self.x_shape[2]):
                 total_x = 0
                 for k in range(self.x_shape[2]):
                     total_x += self.x[i][j][k]
@@ -176,14 +185,15 @@ class softmax():
 
 
 def train():
-    take_photos()
+    #take_photos()
     print("Photo taking complete, commencing photo processing")
-    all_photos = [] # This will be a 4D array, with all photos taken from different people
+    all_photos = [] # This will be a 5D array, with all photos taken from different people
+    # 0 = person, 1 = image of person, 2 = number of 5x5 rows, 3 = number of 5x5 columns, 4 = number of pixels in 5x5 (25)
     for i in range(number_of_people):
         all_photos.append([])
         for j in range(number_of_photos):
             try:
-                image_path = os.path.join(i, f"image{j}.png")
+                image_path = os.path.join(str(i), f"image{j}.png")
                 img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
                 img = standardization(img)
                 img = five_by_five(img)
@@ -198,9 +208,11 @@ def train():
 
     run = True
     total_iteration = 0
+    prev_cost = 999
     while run:
         total_iteration += 1
         for i in range(number_of_people):
+            # print(all_photos.shape), in case you need a reminder for what the all_image array looks like
 
             input_layer = logistic_regression(all_photos[i])
             a1 = input_layer.forward_prop()
@@ -217,3 +229,16 @@ def train():
             output = softmax(a3, i)
             cost = output.cost()
             print(f"Iteration: {total_iteration}, cost: {cost}, person: {i}")
+
+            output.gradient_descent()
+            current_d = hidden2.back_prop(cost)
+            current_d = hidden1.back_prop(current_d)
+            current_d = input_layer.back_prop(current_d)
+
+            if prev_cost - cost <= 0.01:
+                print("Training complete")
+                run = False
+            else:
+                prev_cost = cost
+
+train()
