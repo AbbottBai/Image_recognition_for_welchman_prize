@@ -106,7 +106,7 @@ class relu():
                         for k in range(len(self.w[2])):
                             for l in range(len(self.w[3])):
                                 old_w = self.w[i][j][k][l]
-                                self.w[i][j][k][l] -= self.alpha * prev_d[a][b] * old_w * (total_x / (self.x.shape[2] * self.x.shape[3])) # Update w and b for all images at once to prevent w and b overfitting and changing drastically to one pixel
+                                self.w[i][j][k][l] -= self.alpha * prev_d[a][b] * old_w * (total_x / (self.x.shape[2] * self.x.shape[3]))
 
                         self.b[i][j] -= self.alpha * prev_d[a][b] * sum_w # Average w?
 
@@ -215,42 +215,32 @@ def train():
             alpha = 0.0001
         else:
             alpha = 0.001
-        hidden1 = relu(all_photos, 4096, alpha)
+
+        hidden1 = relu(all_photos, 2025, alpha)
         a1 = hidden1.forward_prop()
         print("hidden layer 1 forward propagation complete")
 
-        hidden2 = relu(a1, 2025, alpha)
+        hidden2 = relu(a1, 1024, alpha)
         a2 = hidden2.forward_prop()
         print("hidden layer 2 forward propagation complete")
 
-        hidden3 = relu(a2, 1024, alpha)
+        hidden3 = relu(a2, 529, alpha)
         a3 = hidden3.forward_prop()
         print("hidden layer 3 forward propagation complete")
 
-        hidden4 = relu(a3, 529, alpha)
+        hidden4 = relu(a3, 121, alpha)
         a4 = hidden4.forward_prop()
         print("hidden layer 4 forward propagation complete")
 
-        hidden5 = relu(a4, 256, alpha)
-        a5 = hidden5.forward_prop()
-        print("hidden layer 5 forward propagation complete")
-
-        hidden6 = relu(a5, 121, alpha)
-        a6 = hidden6.forward_prop()
-        print("hidden layer 6 forward propagation complete")
-
-        output = softmax(a6, number_of_people, alpha)
+        output = softmax(a4, number_of_people, alpha)
         output.forward_prop()
         print("Output layer forward propagation complete")
         cost, total_cost = output.cost()
         print(f"Iteration: {total_iteration}, cost: {total_cost}")
 
         output.gradient_descent()
-        current_d = hidden6.back_prop(cost)
         print("output layer backprop complete")
-        current_d = hidden5.back_prop(current_d)
-        print("hidden 5 backprop complete")
-        current_d = hidden4.back_prop(current_d)
+        current_d = hidden4.back_prop(cost)
         print("hidden 4 backprop complete")
         current_d = hidden3.back_prop(current_d)
         print("hidden 3 backprop complete")
