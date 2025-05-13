@@ -83,8 +83,6 @@ class relu():
         start_time = int(time.time())
         print("Starting forward propagation")
         self.w = np.array(self.w, dtype=np.float16)
-        print(f"w shape: {self.w.shape}")
-        print(f"x shape: {self.x.shape}")
         for i in range(self.sqrt_neurons):
             for j in range(self.sqrt_neurons):
 
@@ -97,7 +95,6 @@ class relu():
                     self.output[k][i][j] = np.sum(self.w[i][j] * self.x[k]) + self.b[i][j] # W contains corresponding shape to x, so it has to be transposed before matrix multiplication
 
         self.output = np.array(self.output)
-        print(f"output shape: {self.output.shape}")
         return self.output
 
     def back_prop(self, prev_d): # Image by image
