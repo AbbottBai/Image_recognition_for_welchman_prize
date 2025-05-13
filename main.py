@@ -3,7 +3,7 @@ import numpy as np
 import os
 import random
 
-number_of_photos = 1000
+number_of_photos = 200
 number_of_people = 3
 
 def take_photos():
@@ -41,7 +41,7 @@ def take_photos():
 # This is also used in normal distribution!
 def standardization(img):
     img_size = img.shape
-    img = img.astype(np.float64) # Higher precision to reduce rounding error
+    img = img.astype(np.float32)
     sum = 0.0
     squared_sum = 0.0
     number_of_pixels = img.shape[0] * img.shape[1]
@@ -79,19 +79,18 @@ class relu():
         self.alpha = alpha
 
     def forward_prop(self):
-        self.w = np.array(self.w, dtype=np.float32)
+        print("Starting forward prop")
+        self.w = np.array(self.w, dtype=np.float16)
         for i in range(len(self.w[0])):
             for j in range(len(self.w[1])):
-                self.w[i][j] = self.w[i][j].T # This transposes all matrices in all neurons, ready for matrix multiplication
+                print(f"Current neuron - row: {i} out of {len(self.w[0])}. Column: {j} out of {len(self.w[0])}")
 
                 for k in range(self.x.shape[0]):
                     for l in range(self.x.shape[1]):
-                        self.output[k][l][i][j] = np.matmul(self.w[i][j], self.x[k][l]) + self.b[i][j]
+                        self.output[k][l][i][j] = np.matmul(self.w[i][j].T, self.x[k][l]) + self.b[i][j] # W contains corresponding shape to x, so it has to be transposed before matrix multiplication
 
-                self.w[i][j] = self.w[i][j].T # This returns all w back to original shape after matmul.
-
-        output = np.array(self.output)
-        return output
+        self.output = np.array(self.output)
+        return self.output
 
     def back_prop(self, prev_d): # Implement matmul? Image by image
         sum_weights = np.sum(self.w)
@@ -127,8 +126,8 @@ class softmax():
         self.alpha = alpha
 
     def forward_prop(self):
-        std_x = [[[[0 for _ in range(self.x.shape[3])] for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
-        self.w = np.array(self.w, dtype=np.float32)
+        #std_x = [[[[0 for _ in range(self.x.shape[3])] for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
+        self.w = np.array(self.w, dtype=np.float16)
         for i in range(self.x.shape[0]):
             for j in range(self.x.shape[1]):
                 total_x = np.sum(self.x[i][j])
@@ -138,15 +137,12 @@ class softmax():
                 std_dev =  np.sqrt((total_x2/(self.x.shape[2] * self.x.shape[3])) - mean_x ** 2)
                 for a in range(self.x.shape[2]):
                     for b in range(self.x.shape[3]):
-                        std_x[i][j][a][b] = (self.x[i][j][a][b] - mean_x) / std_dev
+                        self.x[i][j][a][b] = (self.x[i][j][a][b] - mean_x) / std_dev
                 denominator = 0.0
                 for c in range(self.num_neurons):
-                    self.w[c] = self.w[c].T # This transposes w for matrix multiplication later.
-                    self.linear_func[i][j][c] = np.matmul(self.w[c], std_x[i][j]) + self.b[c]
+                    self.linear_func[i][j][c] = np.matmul(self.w[c].T, self.x[i][j]) + self.b[c]
 
                     denominator += np.exp(self.linear_func[i][j][c])
-
-                    self.w[c] = self.w[c].T # Transposes w back for use later
 
                 for f in range(self.num_neurons):
                     self.output[i][j][f] = np.exp(self.linear_func[i][j][f]) / denominator
@@ -185,11 +181,11 @@ def train():
     # 0 = person, 1 = image of person, 2 = number of rows, 3 = number of columns
     for i in range(number_of_people):
         all_photos.append([])
-        print(f"Processing person {i+1} out of {number_of_people+1}")
+        print(f"Processing person {i+1} out of {number_of_people}")
         photo_counter = 0
         for j in range(number_of_photos):
             if photo_counter >= 10:
-                print(f"Currently processing photo {j+1} out of {number_of_photos}")
+                print(f"Currently processing photo {j} out of {number_of_photos}")
                 photo_counter = 0
             photo_counter += 1
             
@@ -201,10 +197,16 @@ def train():
             except Exception as e:
                 print(f"Error processing image {j} from subdirectory {i}: {e}")
 
-    all_photos = np.array(all_photos)
+    all_photos = np.array(all_photos, dtype=np.float16)
     print("Image processing complete")
 
     print("Commencing model training")
+
+    #batch_size = 20 # WARNING, batch size has to be divisible by number of photos!!!
+    #num_batches = number_of_photos / batch_size
+    #total_batch = []
+    #for i in range(num_batches):
+        #total_batch.append()
 
     run = True
     total_iteration = 0
@@ -282,5 +284,5 @@ def predict():
         counter += 1
 
 
-#take_photos()
+take_photos()
 train()
