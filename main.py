@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import os
 import random
+import time
 
 number_of_photos = 200
 number_of_people = 3
@@ -66,192 +67,192 @@ def standardization(img):
 
 class relu():
     def __init__(self, x, num_neurons, alpha):
-        self.x = x # 0 = person, 1 = image of person, 2 = number of rows, 3 = number of columns
+        self.x = x # 0 = number of photos in batch, 1 = number of rows, 2 = number of columns
         self.num_neurons = num_neurons
         self.sqrt_neurons = int(np.sqrt(self.num_neurons))
         # w is a 4D arrays, one w per pixel. One neuron for all pixels.
-        self.w = [[[[random.uniform(-0.4, 0.4) for _ in range(self.x.shape[3])] for _ in range(self.x.shape[2])] for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)]
+        self.w = [[[[random.uniform(-0.4, 0.4) for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)]
         # W is set to random value to prevent symmetry between all neurons.
         # B is set to 0 as W already prevents symmetry
         # b is a 2D array, one b per neuron.
         self.b = [[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)]
-        self.output = [[[[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
+        self.output = [[[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)] for _ in range(self.x.shape[0])]
         self.alpha = alpha
 
     def forward_prop(self):
-        print("Starting forward prop")
+        start_time = int(time.time())
+        print("Starting forward propagation")
         self.w = np.array(self.w, dtype=np.float16)
-        for i in range(len(self.w[0])):
-            for j in range(len(self.w[1])):
-                print(f"Current neuron - row: {i} out of {len(self.w[0])}. Column: {j} out of {len(self.w[0])}")
+        print(f"w shape: {self.w.shape}")
+        print(f"x shape: {self.x.shape}")
+        for i in range(self.sqrt_neurons):
+            for j in range(self.sqrt_neurons):
+
+                end_time = int(time.time())
+                if end_time - start_time > 20:
+                    print(f"forward propagation progress: {round((i/len(self.w[0])) * 100 + j/len(self.w[1]), 2)}%")
+                    start_time = end_time
 
                 for k in range(self.x.shape[0]):
-                    for l in range(self.x.shape[1]):
-                        self.output[k][l][i][j] = np.matmul(self.w[i][j].T, self.x[k][l]) + self.b[i][j] # W contains corresponding shape to x, so it has to be transposed before matrix multiplication
+                    self.output[k][i][j] = np.sum(self.w[i][j] * self.x[k]) + self.b[i][j] # W contains corresponding shape to x, so it has to be transposed before matrix multiplication
 
         self.output = np.array(self.output)
+        print(f"output shape: {self.output.shape}")
         return self.output
 
-    def back_prop(self, prev_d): # Implement matmul? Image by image
+    def back_prop(self, prev_d): # Image by image
         sum_weights = np.sum(self.w)
         current_d = [[0 for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])] # 2D array, one per image
         for a in range(self.x.shape[0]):
-            for b in range(self.x.shape[1]):
-                total_x = np.sum(self.x[a][b]) # Sum of pixels in one image
+            total_x = np.sum(self.x[a]) # Sum of pixels in one image
 
-                for i in range(len(self.w[0])):
-                    for j in range(len(self.w[1])):
-                        sum_w = np.sum(self.w[i][j])
-                        for k in range(len(self.w[2])):
-                            for l in range(len(self.w[3])):
-                                old_w = self.w[i][j][k][l]
-                                self.w[i][j][k][l] -= self.alpha * prev_d[a][b] * old_w * (total_x / (self.x.shape[2] * self.x.shape[3]))
+            for i in range(len(self.w[0])):
+                for j in range(len(self.w[1])):
+                    sum_w = np.sum(self.w[i][j])
+                    for k in range(len(self.w[2])):
+                        for l in range(len(self.w[3])):
+                            old_w = self.w[i][j][k][l]
+                            self.w[i][j][k][l] -= self.alpha * prev_d[a] * old_w * (total_x / (self.x.shape[2] * self.x.shape[3]))
 
-                        self.b[i][j] -= self.alpha * prev_d[a][b] * sum_w # Average w?
+                    self.b[i][j] -= self.alpha * prev_d[a] * sum_w # Average w?
 
-                current_d[a][b] = prev_d[a][b] * sum_weights # Average the weights?
+            current_d[a] = prev_d[a] * sum_weights # Average the weights?
 
         return current_d
 
 class softmax():
-    def __init__(self, x, num_neurons, alpha):
-        self.x = x # 0 = person, 1 = image of person, 2 = number of rows, 3 = number of columns
+    def __init__(self, x, num_neurons, alpha, y):
+        self.x = x # 0 = number of photos in batch, 1 = number of rows, 2 = number of columns
         self.num_neurons = num_neurons
         # w is a 3D array which contains one w per pixel for all pixels per neuron.
-        self.w = [[[random.uniform(-0.4, 0.4) for _ in range(self.x.shape[3])] for _ in range(self.x.shape[2])] for _ in range(self.num_neurons)]
+        self.w = [[[random.uniform(-0.4, 0.4) for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.num_neurons)]
         self.b = [0 for _ in range(self.num_neurons)]
-        self.linear_func = [[[0 for _ in range(self.num_neurons)] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
-        self.output = [[[0 for _ in range(num_neurons)] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
-        self.y = int() # Start index from 0
+        self.linear_func = [[0 for _ in range(self.num_neurons)] for _ in range(self.x.shape[0])]
+        self.output = [[0 for _ in range(self.num_neurons)] for _ in range(self.x.shape[0])]
+        self.y = y
         self.alpha = alpha
 
     def forward_prop(self):
         #std_x = [[[[0 for _ in range(self.x.shape[3])] for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
         self.w = np.array(self.w, dtype=np.float16)
         for i in range(self.x.shape[0]):
-            for j in range(self.x.shape[1]):
-                total_x = np.sum(self.x[i][j])
-                total_x2 = np.sum(np.square(self.x[i][j]))
-                # Normal standardization is implimented so the exponent doesn't get too large and uncomputable
-                mean_x = total_x / (self.x.shape[0] * self.x.shape[1] * self.x.shape[2] * self.x.shape[3])
-                std_dev =  np.sqrt((total_x2/(self.x.shape[2] * self.x.shape[3])) - mean_x ** 2)
-                for a in range(self.x.shape[2]):
-                    for b in range(self.x.shape[3]):
-                        self.x[i][j][a][b] = (self.x[i][j][a][b] - mean_x) / std_dev
-                denominator = 0.0
-                for c in range(self.num_neurons):
-                    self.linear_func[i][j][c] = np.matmul(self.w[c].T, self.x[i][j]) + self.b[c]
+            total_x = np.sum(self.x[i])
+            total_x2 = np.sum(np.square(self.x[i]))
+            # Normal standardization is implimented so the exponent doesn't get too large and uncomputable
+            mean_x = total_x / (self.x.shape[1] * self.x.shape[2])
+            std_dev =  np.sqrt((total_x2 / (self.x.shape[1] * self.x.shape[2])) - np.square(mean_x))
+            for a in range(self.x.shape[1]):
+                for b in range(self.x.shape[2]):
+                    self.x[i][a][b] = (self.x[i][a][b] - mean_x) / std_dev
+            denominator = 0.0
+            for c in range(self.num_neurons):
+                self.linear_func[i][c] = np.sum(self.w[c] * self.x[i]) + self.b[c]
 
-                    denominator += np.exp(self.linear_func[i][j][c])
+                denominator += np.exp(self.linear_func[i][c])
 
-                for f in range(self.num_neurons):
-                    self.output[i][j][f] = np.exp(self.linear_func[i][j][f]) / denominator
+            for f in range(self.num_neurons):
+                self.output[i][f] = np.exp(self.linear_func[i][f]) / denominator
 
 
     def cost(self): # Image by image
-        cost = [[0 for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])] # 2D array, one per image
+        cost = [0 for _ in range(self.x.shape[0])] # 1D array, one per image
         for i in range(self.x.shape[0]):
-            self.y = i
-            for j in range(self.x.shape[1]):
-                cost[i][j] = -(np.log(self.output[i][j][self.y]))
+            cost[i] = -(np.log(self.output[i][self.y]))
 
-        total_cost = np.sum(cost) / (self.x.shape[1] * self.x.shape[0])
+        total_cost = np.sum(cost) / self.x.shape[0]
 
         return cost, total_cost
 
     def gradient_descent(self): # Image by image
         for i in range(self.x.shape[0]):
-            self.y = i
-            for j in range(self.x.shape[1]):
-                self.output[i][j][self.y] -= 1
-                # Line above is to make the gradient of the loss of the actual value negative whilst keeping the others positive
-                # So it reduces the weight for wrong predictions but increases the weight for right predictions later on...
-                total_x = sum(self.x[i][j])
+            self.output[i][self.y] -= 1
+            # Line above is to make the gradient of the loss of the actual value negative whilst keeping the others positive
+            # So it reduces the weight for wrong predictions but increases the weight for right predictions later on...
+            total_x = sum(self.x[i])
 
-                for m in range(self.num_neurons):
-                    for n in range(self.x.shape[2]):
-                        for p in range(self.x.shape[3]):
-                            self.w[m][n][p] -= self.alpha * self.output[i][j][m] * (total_x / (self.x.shape[2] * self.x.shape[3]))
-                    self.b[m] -= self.alpha * self.output[i][j][m]
+            for m in range(self.num_neurons):
+                for n in range(self.x.shape[1]):
+                    for p in range(self.x.shape[2]):
+                        self.w[m][n][p] -= self.alpha * self.output[i][m] * (total_x / (self.x.shape[1] * self.x.shape[2]))
+                self.b[m] -= self.alpha * self.output[i][m]
 
 
 def train():
-    print("commencing photo processing")
-    all_photos = [] # This will be a 4D array, with all photos taken from different people
-    # 0 = person, 1 = image of person, 2 = number of rows, 3 = number of columns
+    print("\nCommencing photo processing")
+    all_photos = [] # This will be a 5D array, with all photos taken from different people
+    # 0 = number of person, 1 = number of batches, 2 = number of photos in batch, 3 = number of rows, 4 = number of columns
+
+    batch_size = 10 # WARNING: THIS HAS TO BE DIVISIBLE BY NUMBER OF PHOTOS
+    num_batches_per_person = number_of_photos // batch_size
     for i in range(number_of_people):
+        print(f"\nProcessing photos of person {i + 1} out of {number_of_people}\n")
         all_photos.append([])
-        print(f"Processing person {i+1} out of {number_of_people}")
-        photo_counter = 0
-        for j in range(number_of_photos):
-            if photo_counter >= 10:
-                print(f"Currently processing photo {j} out of {number_of_photos}")
-                photo_counter = 0
-            photo_counter += 1
-            
-            try:
-                image_path = os.path.join(str(i), f"image{j}.png")
-                img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
-                img = standardization(img)
-                all_photos[i].append(img)
-            except Exception as e:
-                print(f"Error processing image {j} from subdirectory {i}: {e}")
+        for j in range(num_batches_per_person):
+            print(f"Processing batch {j + 1} out of {num_batches_per_person}")
+            all_photos[i].append([]) # Appends a sublist for each batch to every person.
+            for k in range(batch_size):
+                try:
+                    image_path = os.path.join(str(i), f"image{j * batch_size + k}.png")
+                    img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+                    img = standardization(img)
+                    all_photos[i][j].append(img)
+                except Exception as e:
+                    print(f"Error processing image {j * batch_size + k} from subdirectory {i}: {e}")
 
     all_photos = np.array(all_photos, dtype=np.float16)
-    print("Image processing complete")
+    print(f"\nAll photos array shape: {all_photos.shape}")
+    print("\nImage processing complete")
 
-    print("Commencing model training")
-
-    #batch_size = 20 # WARNING, batch size has to be divisible by number of photos!!!
-    #num_batches = number_of_photos / batch_size
-    #total_batch = []
-    #for i in range(num_batches):
-        #total_batch.append()
+    print("\nCommencing model training")
 
     run = True
     total_iteration = 0
     total_cost = 100
     while run:
-        total_iteration += 1
         if total_cost <= 20:
             alpha = 0.0001
         else:
             alpha = 0.001
 
-        hidden1 = relu(all_photos, 2025, alpha)
-        a1 = hidden1.forward_prop()
-        print("hidden layer 1 forward propagation complete")
+        for a in range(all_photos.shape[0]):
+            for b in range(all_photos.shape[1]):
+                hidden1 = relu(all_photos[a][b], 2025, alpha)
+                a1 = hidden1.forward_prop()
+                print("hidden layer 1 forward propagation complete")
 
-        hidden2 = relu(a1, 1024, alpha)
-        a2 = hidden2.forward_prop()
-        print("hidden layer 2 forward propagation complete")
+                hidden2 = relu(a1, 1024, alpha)
+                a2 = hidden2.forward_prop()
+                print("hidden layer 2 forward propagation complete")
 
-        hidden3 = relu(a2, 529, alpha)
-        a3 = hidden3.forward_prop()
-        print("hidden layer 3 forward propagation complete")
+                hidden3 = relu(a2, 529, alpha)
+                a3 = hidden3.forward_prop()
+                print("hidden layer 3 forward propagation complete")
 
-        hidden4 = relu(a3, 121, alpha)
-        a4 = hidden4.forward_prop()
-        print("hidden layer 4 forward propagation complete")
+                hidden4 = relu(a3, 121, alpha)
+                a4 = hidden4.forward_prop()
+                print("hidden layer 4 forward propagation complete")
 
-        output = softmax(a4, number_of_people, alpha)
-        output.forward_prop()
-        print("Output layer forward propagation complete")
-        cost, total_cost = output.cost()
-        print(f"Iteration: {total_iteration}, cost: {total_cost}")
+                output = softmax(a4, number_of_people, alpha, a)
+                output.forward_prop()
+                print("Output layer forward propagation complete")
+                cost, total_cost = output.cost()
+                print(f"Total iteration: {total_iteration}, batch number: {b}, cost: {total_cost}")
 
-        output.gradient_descent()
-        print("output layer backprop complete")
-        current_d = hidden4.back_prop(cost)
-        print("hidden 4 backprop complete")
-        current_d = hidden3.back_prop(current_d)
-        print("hidden 3 backprop complete")
-        current_d = hidden2.back_prop(current_d)
-        print("hidden 2 backprop complete")
-        current_d = hidden1.back_prop(current_d)
-        print("hidden 1 backprop complete")
-        if total_cost <= 0.001:
-            run = False
+                output.gradient_descent()
+                print("output layer backprop complete")
+                current_d = hidden4.back_prop(cost)
+                print("hidden 4 backprop complete")
+                current_d = hidden3.back_prop(current_d)
+                print("hidden 3 backprop complete")
+                current_d = hidden2.back_prop(current_d)
+                print("hidden 2 backprop complete")
+                current_d = hidden1.back_prop(current_d)
+                print("hidden 1 backprop complete")
+
+                if total_cost <= 0.001:
+                    run = False # Terminate as soon as cost is low enough, not dependent on number of iterations
+
+        total_iteration += 1
 
 
 def predict():
@@ -284,5 +285,5 @@ def predict():
         counter += 1
 
 
-take_photos()
+#take_photos()
 train()
