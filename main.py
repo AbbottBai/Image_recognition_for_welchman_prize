@@ -69,23 +69,26 @@ class relu():
         self.x = x # 0 = person, 1 = image of person, 2 = number of rows, 3 = number of columns
         self.num_neurons = num_neurons
         self.sqrt_neurons = int(np.sqrt(self.num_neurons))
-        self.w = [[random.uniform(-0.4, 0.4) for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)]
+        # w is a 4D arrays, one w per pixel. One neuron for all pixels.
+        self.w = [[[[random.uniform(-0.4, 0.4) for _ in range(self.x.shape[3])] for _ in range(self.x.shape[2])] for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)]
         # W is set to random value to prevent symmetry between all neurons.
         # B is set to 0 as W already prevents symmetry
+        # b is a 2D array, one b per neuron.
         self.b = [[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)]
         self.output = [[[[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
         self.alpha = alpha
 
     def forward_prop(self):
-        for i in range(self.x.shape[0]):
-            for j in range(self.x.shape[1]):
-                total_x = np.sum(self.x[i][j])
+        self.w = np.array(self.w, dtype=np.float32)
+        for i in range(len(self.w[0])):
+            for j in range(len(self.w[1])):
+                self.w[i][j] = self.w[i][j].T # This transposes all matrices in all neurons, ready for matrix multiplication
 
-                for k in range(self.sqrt_neurons):
-                    for l in range(self.sqrt_neurons):
-                        func = self.w[k][l] * total_x + self.b[k][l]
-                        if func > 0:
-                            self.output[i][j][k][l] = func
+                for k in range(self.x.shape[0]):
+                    for l in range(self.x.shape[1]):
+                        self.output[k][l][i][j] = np.matmul(self.w[i][j], self.x[k][l]) + self.b[i][j]
+
+                self.w[i][j] = self.w[i][j].T # This returns all w back to original shape after matmul.
 
         output = np.array(self.output)
         return output
@@ -99,11 +102,15 @@ class relu():
 
                 for i in range(len(self.w[0])):
                     for j in range(len(self.w[1])):
-                        old_w = self.w[i][j]
-                        self.w[i][j] -= self.alpha * prev_d[a][b] * old_w * (total_x / (self.x.shape[2] * self.x.shape[3])) # Update w and b for all images at once to prevent w and b overfitting and changing drastically to one pixel
-                        self.b[i][j] -= self.alpha * prev_d[a][b] * old_w
+                        sum_w = np.sum(self.w[i][j])
+                        for k in range(len(self.w[2])):
+                            for l in range(len(self.w[3])):
+                                old_w = self.w[i][j][k][l]
+                                self.w[i][j][k][l] -= self.alpha * prev_d[a][b] * old_w * (total_x / (self.x.shape[2] * self.x.shape[3])) # Update w and b for all images at once to prevent w and b overfitting and changing drastically to one pixel
 
-                current_d[a][b] = prev_d[a][b] * sum_weights
+                        self.b[i][j] -= self.alpha * prev_d[a][b] * sum_w # Average w?
+
+                current_d[a][b] = prev_d[a][b] * sum_weights # Average the weights?
 
         return current_d
 
@@ -111,7 +118,8 @@ class softmax():
     def __init__(self, x, num_neurons, alpha):
         self.x = x # 0 = person, 1 = image of person, 2 = number of rows, 3 = number of columns
         self.num_neurons = num_neurons
-        self.w = [random.uniform(-0.4, 0.4) for _ in range(self.num_neurons)]
+        # w is a 3D array which contains one w per pixel for all pixels per neuron.
+        self.w = [[[random.uniform(-0.4, 0.4) for _ in range(self.x.shape[3])] for _ in range(self.x.shape[2])] for _ in range(self.num_neurons)]
         self.b = [0 for _ in range(self.num_neurons)]
         self.linear_func = [[[0 for _ in range(self.num_neurons)] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
         self.output = [[[0 for _ in range(num_neurons)] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
@@ -119,31 +127,30 @@ class softmax():
         self.alpha = alpha
 
     def forward_prop(self):
+        std_x = [[[[0 for _ in range(self.x.shape[3])] for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
+        self.w = np.array(self.w, dtype=np.float32)
         for i in range(self.x.shape[0]):
             for j in range(self.x.shape[1]):
-                total_x = 0.0
-                total_x2 = 0.0
-                std_x = 0.0
-                for a in range(self.x.shape[2]):
-                    for b in range(self.x.shape[3]):
-                        total_x += self.x[i][j][a][b]
-                        total_x2 += self.x[i][j][a][b] ** 2
+                total_x = np.sum(self.x[i][j])
+                total_x2 = np.sum(np.square(self.x[i][j]))
                 # Normal standardization is implimented so the exponent doesn't get too large and uncomputable
                 mean_x = total_x / (self.x.shape[0] * self.x.shape[1] * self.x.shape[2] * self.x.shape[3])
                 std_dev =  np.sqrt((total_x2/(self.x.shape[2] * self.x.shape[3])) - mean_x ** 2)
-                for c in range(self.x.shape[2]):
-                    for d in range(self.x.shape[3]):
-                        std_x += (self.x[i][j][c][d] - mean_x) / std_dev
-                for k in range(self.num_neurons):
-                    self.linear_func[i][j][k] = self.w[k] * std_x + self.b[k]
-
-        for f in range(self.x.shape[0]):
-            for g in range(self.x.shape[1]):
+                for a in range(self.x.shape[2]):
+                    for b in range(self.x.shape[3]):
+                        std_x[i][j][a][b] = (self.x[i][j][a][b] - mean_x) / std_dev
                 denominator = 0.0
-                for z in range(self.num_neurons):
-                    denominator += np.exp(self.linear_func[f][g][z])
-                for h in range(self.num_neurons):
-                    self.output[f][g][h] = np.exp(self.linear_func[f][g][h]) / denominator
+                for c in range(self.num_neurons):
+                    self.w[c] = self.w[c].T # This transposes w for matrix multiplication later.
+                    self.linear_func[i][j][c] = np.matmul(self.w[c], std_x[i][j]) + self.b[c]
+
+                    denominator += np.exp(self.linear_func[i][j][c])
+
+                    self.w[c] = self.w[c].T # Transposes w back for use later
+
+                for f in range(self.num_neurons):
+                    self.output[i][j][f] = np.exp(self.linear_func[i][j][f]) / denominator
+
 
     def cost(self): # Image by image
         cost = [[0 for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])] # 2D array, one per image
@@ -166,7 +173,9 @@ class softmax():
                 total_x = sum(self.x[i][j])
 
                 for m in range(self.num_neurons):
-                    self.w[m] -= self.alpha * self.output[i][j][m] * (total_x / (self.x.shape[2] * self.x.shape[3]))
+                    for n in range(self.x.shape[2]):
+                        for p in range(self.x.shape[3]):
+                            self.w[m][n][p] -= self.alpha * self.output[i][j][m] * (total_x / (self.x.shape[2] * self.x.shape[3]))
                     self.b[m] -= self.alpha * self.output[i][j][m]
 
 
@@ -176,7 +185,14 @@ def train():
     # 0 = person, 1 = image of person, 2 = number of rows, 3 = number of columns
     for i in range(number_of_people):
         all_photos.append([])
+        print(f"Processing person {i+1} out of {number_of_people+1}")
+        photo_counter = 0
         for j in range(number_of_photos):
+            if photo_counter >= 10:
+                print(f"Currently processing photo {j+1} out of {number_of_photos}")
+                photo_counter = 0
+            photo_counter += 1
+            
             try:
                 image_path = os.path.join(str(i), f"image{j}.png")
                 img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
@@ -201,24 +217,31 @@ def train():
             alpha = 0.001
         hidden1 = relu(all_photos, 4096, alpha)
         a1 = hidden1.forward_prop()
+        print("hidden layer 1 forward propagation complete")
 
         hidden2 = relu(a1, 2025, alpha)
         a2 = hidden2.forward_prop()
+        print("hidden layer 2 forward propagation complete")
 
         hidden3 = relu(a2, 1024, alpha)
         a3 = hidden3.forward_prop()
+        print("hidden layer 3 forward propagation complete")
 
         hidden4 = relu(a3, 529, alpha)
         a4 = hidden4.forward_prop()
+        print("hidden layer 4 forward propagation complete")
 
         hidden5 = relu(a4, 256, alpha)
         a5 = hidden5.forward_prop()
+        print("hidden layer 5 forward propagation complete")
 
         hidden6 = relu(a5, 121, alpha)
         a6 = hidden6.forward_prop()
+        print("hidden layer 6 forward propagation complete")
 
         output = softmax(a6, number_of_people, alpha)
         output.forward_prop()
+        print("Output layer forward propagation complete")
         cost, total_cost = output.cost()
         print(f"Iteration: {total_iteration}, cost: {total_cost}")
 
