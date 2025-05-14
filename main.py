@@ -196,10 +196,10 @@ def train():
     all_photos = [] # This will be a 5D array, with all photos taken from different people
     # 0 = number of person, 1 = number of batches, 2 = number of photos in batch, 3 = number of rows, 4 = number of columns
 
-    batch_size = 10 # WARNING: THIS HAS TO BE DIVISIBLE BY NUMBER OF PHOTOS
+    batch_size = 20 # WARNING: THIS HAS TO BE DIVISIBLE BY NUMBER OF PHOTOS
     num_batches_per_person = number_of_photos // batch_size
     for i in range(number_of_people):
-        print(f"\nProcessing photos of person {i + 1} out of {number_of_people}\n")
+        print(f"\nProcessing photos of person {i + 1} out of {number_of_people}")
         all_photos.append([])
         for j in range(num_batches_per_person):
             all_photos[i].append([]) # Appends a sublist for each batch to every person.
@@ -244,7 +244,8 @@ def train():
                 output_layer = softmax(a4, number_of_people, alpha, a)
                 output_layer.forward_prop()
                 cost, total_cost = output_layer.cost()
-                print(f"Total iteration: {total_iteration}, batch number: {b}, cost: {total_cost}")
+                print(f"Total iteration: {total_iteration}, current person: {a + 1} out of {all_photos.shape[0]}, "
+                      f"batch number: {b + 1} out of {batch_size}, cost: {total_cost}")
 
                 output_layer.gradient_descent()
                 current_d = hidden4.back_prop(cost)
@@ -252,7 +253,7 @@ def train():
                 current_d = hidden2.back_prop(current_d)
                 current_d = hidden1.back_prop(current_d)
 
-                if total_cost <= 0.01 and total_iteration > 3:
+                if total_iteration >= 3:
                     run = False # Terminate as soon as cost is low enough, and that it has passed a few iterations through entire dataset, to prevent overfitting to one batch.
 
         total_iteration += 1
