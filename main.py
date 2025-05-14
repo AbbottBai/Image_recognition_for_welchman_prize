@@ -187,8 +187,8 @@ def save_layer_parameters(layer, filename):
 def load_layer_parameters(layer, filename):
     data = np.load(filename)
     num_layers = len([k for k in data.keys() if k.startswith("w")])
-    layer.weights = [data[f"w{i}"] for i in range(num_layers)]
-    layer.biases = [data[f"b{i}"] for i in range(num_layers)]
+    layer.w = [data[f"w{i}"] for i in range(num_layers)]
+    layer.b = [data[f"b{i}"] for i in range(num_layers)]
 
 
 def train():
@@ -276,7 +276,7 @@ def predict():
     run = True
     counter = 0
     while run:
-        inp = input("press t to take a photo, or q to quit").lower()
+        inp = input("press t to take a photo, or q to quit: ").lower()
         if inp[0] == "q":
             run = False
         else:
@@ -289,31 +289,31 @@ def predict():
                 # Casts the original image into float, so that overflow does not occur due to negative and decimal calculations
                 # being carried out on integers.
 
-                filename = os.path.join(os.path.dirname(__file__), f"{counter}.png")
-                cv2.imwrite(filename, resized_gray)  # Save the frame to file
-                print(f"Saved {filename}")
-                cv2.imshow('Captured Image', frame)  # Optional: show the photo
-
-                image = f"{counter}.png"
-
             else:
                 print("Failed to capture image")
+
+            cap.release()
+            cv2.destroyAllWindows()
 
 
             # Image standardization
             input_array = []
             try:
-                image = standardization(image)
+                image = standardization(resized_gray)
                 input_array.append(image)
-                print("Image processing complete")
+                input_array = np.array(input_array, dtype=np.float64)
+                print("\nImage processing complete")
             except Exception as e:
                 print(f"Error during standardization process of image: {e}")
+
+            print("\nForward propagation commencing...")
 
             # Initialise layers
             alpha = 0.01
 
             hidden1 = relu(input_array, 2025, alpha)
             load_layer_parameters(hidden1, "h1.npz")
+            print(hidden1.w[0][0][0][0])
             a1 = hidden1.forward_prop()
 
             hidden2 = relu(a1, 1024, alpha)
@@ -339,8 +339,8 @@ def predict():
                     result[1] = i
                     max_prob = output_layer.output[0][i]
 
-            print(f"The model predicts that this photo belongs to person {result[1]}")
-            print(f"The likelihood that this photo belongs to person {result[1]} is {result[0] * 100}%")
+            print(f"\nThe model predicts that this photo belongs to person {result[1]}")
+            print(f"\nThe likelihood that this photo belongs to person {result[1]} is {result[0] * 100}%")
 
             counter += 1
 
