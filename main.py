@@ -2,40 +2,64 @@ import cv2
 import numpy as np
 import os
 import random
-import time
+import albumentations as A
 
-number_of_photos = 200
+number_of_photos = 200 # Number of photos that the camera actually takes
+#IMPORTANT: augmented_photos + 1 must be divisible by batch size!!!
+augmented_photos = 4 # Number of photos that are augmented per photo taken by the camera
+total_num_photos = number_of_photos * augmented_photos + number_of_photos
+
 number_of_people = 3
 
 def take_photos():
+    # Augmentations (flip, rotate, crop, color augment, etc.)
+    # This is to transform original image by applying augmentations. This will increase training set size, and reduce the effect of enviornment factors such as lighting on the final result.
+    transform = A.Compose([
+        A.HorizontalFlip(p=0.5),
+        A.Rotate(limit=15, p=0.5),
+        A.RandomBrightnessContrast(p=0.3),
+    ])
+
     print("Commencing photo capturing")
     for a in range(number_of_people):
         inp = input("Please hit enter once a new person is in front of the camera")
         output_dir = str(a)
         os.makedirs(output_dir, exist_ok=True)
 
-        # Open the webcam (0 = default camera)
-        cap = cv2.VideoCapture(0)
-
+        cap = cv2.VideoCapture(0) # Open the webcam (0 = default camera)
+        current_photo_index = 0
         for i in range(number_of_photos):
             ret, frame = cap.read()  # Capture a frame
             if ret:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 resized_gray = cv2.resize(gray, (250, 250))
                 resized_gray = resized_gray.astype(np.float64)
+                #resized_gray = np.uint8(resized_gray)
                 # Casts the original image into float, so that overflow does not occur due to negative and decimal calculations
                 # being carried out on integers.
 
-                filename = os.path.join(output_dir, f"image{i}.png")
+                filename = os.path.join(output_dir, f"image{current_photo_index}.png")
                 cv2.imwrite(filename, resized_gray)  # Save the frame to file
                 print(f"Saved {filename}")
-                cv2.imshow('Captured Image', frame)  # Optional: show the photo
-                #cv2.waitKey(1)  # Wait 1 ms between captures
+
+                current_photo_index += 1
+
+                # Start of process for augmented photos
+                for j in range(augmented_photos):
+                    augmented = transform(image=frame)["image"]
+                    gray_augmented = cv2.cvtColor(augmented, cv2.COLOR_BGR2GRAY)
+                    resized_augmented = cv2.resize(gray_augmented, (250, 250))
+                    resized_augmented = resized_augmented.astype(np.float64)
+
+                    augmented_filename = os.path.join(output_dir, f"image{current_photo_index}.png")
+                    cv2.imwrite(augmented_filename, resized_augmented)
+
+                    current_photo_index += 1
+
             else:
                 print("Failed to capture image")
 
         cap.release()
-        cv2.destroyAllWindows()
     print("Photo capturing complete")
 
 
@@ -66,29 +90,34 @@ def standardization(img):
 
 
 class relu():
-    def __init__(self, x, num_neurons, alpha):
-        self.x = x # 0 = number of photos in batch, 1 = number of rows, 2 = number of columns
+    def __init__(self, num_neurons, alpha):
+        self.x = None # Placeholder
         self.num_neurons = num_neurons
         self.sqrt_neurons = int(np.sqrt(self.num_neurons))
         # w is a 4D arrays, one w per pixel. One neuron for all pixels.
-        self.w = [[[[random.uniform(-0.4, 0.4) for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)]
+        self.w = None
         # W is set to random value to prevent symmetry between all neurons.
         # B is set to 0 as W already prevents symmetry
         # b is a 2D array, one b per neuron.
         self.b = [[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)]
-        self.output = [[[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)] for _ in range(self.x.shape[0])]
+        self.output = None
         self.alpha = alpha
-        self.w = np.array(self.w, dtype=np.float64)
         self.b = np.array(self.b, dtype=np.float64)
 
-    def forward_prop(self):
-        start_time = int(time.time())
+    def initialize_parameters(self):
+        # w is a 4D arrays, one w per pixel. One neuron for all pixels.
+        self.w = [[[[random.uniform(-0.4, 0.4) for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)]
+        self.output = [[[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)] for _ in range(self.x.shape[0])]
+        self.w = np.array(self.w, dtype=np.float64)
+
+    def forward_prop(self, x):
+        self.x = x # 0 = number of photos in batch, 1 = number of rows, 2 = number of columns
+
+        if self.w is None:
+            self.initialize_parameters()
+
         for i in range(self.sqrt_neurons):
             for j in range(self.sqrt_neurons):
-
-                end_time = int(time.time())
-                if end_time - start_time > 2:
-                    start_time = end_time
 
                 for k in range(self.x.shape[0]):
                     self.output[k][i][j] = np.sum(self.w[i][j] * self.x[k]) + self.b[i][j]
@@ -117,21 +146,31 @@ class relu():
         return current_d
 
 class softmax():
-    def __init__(self, x, num_neurons, alpha, y):
-        self.x = x # 0 = number of photos in batch, 1 = number of rows, 2 = number of columns
+    def __init__(self, num_neurons, alpha):
+        self.x = None # placeholder
         self.num_neurons = num_neurons
         # w is a 3D array which contains one w per pixel for all pixels per neuron.
-        self.w = [[[random.uniform(-0.4, 0.4) for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.num_neurons)]
+        self.w = None
         self.b = [0 for _ in range(self.num_neurons)]
-        self.linear_func = [[0 for _ in range(self.num_neurons)] for _ in range(self.x.shape[0])]
-        self.output = [[0 for _ in range(self.num_neurons)] for _ in range(self.x.shape[0])]
-        self.y = y
+        self.linear_func = None
+        self.output = None
+        self.y = None # Placeholder
         self.alpha = alpha
-        self.w = np.array(self.w, dtype=np.float64)
         self.b = np.array(self.b, dtype=np.float64)
 
-    def forward_prop(self):
-        # std_x = [[[[0 for _ in range(self.x.shape[3])] for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
+    def initialize_parameters(self):
+        # w is a 3D array which contains one w per pixel for all pixels per neuron.
+        self.w = [[[random.uniform(-0.4, 0.4) for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.num_neurons)]
+        self.linear_func = [[0 for _ in range(self.num_neurons)] for _ in range(self.x.shape[0])]
+        self.output = [[0 for _ in range(self.num_neurons)] for _ in range(self.x.shape[0])]
+        self.w = np.array(self.w, dtype=np.float64)
+
+    def forward_prop(self, x):
+        self.x = x  # 0 = number of photos in batch, 1 = number of rows, 2 = number of columns
+
+        if self.w is None: # Checks if parameters has been defined yet.
+            self.initialize_parameters()
+
         for i in range(self.x.shape[0]):
             total_x = np.sum(self.x[i])
             total_x2 = np.sum(np.square(self.x[i]))
@@ -151,7 +190,8 @@ class softmax():
                 self.output[i][f] = np.exp(self.linear_func[i][f]) / denominator
 
 
-    def cost(self): # Image by image
+    def cost(self, y): # Image by image
+        self.y = y
         cost = [0 for _ in range(self.x.shape[0])] # 1D array, one per image
         for i in range(self.x.shape[0]):
             cost[i] = -(np.log(self.output[i][self.y]))
@@ -197,7 +237,8 @@ def train():
     # 0 = number of person, 1 = number of batches, 2 = number of photos in batch, 3 = number of rows, 4 = number of columns
 
     batch_size = 20 # WARNING: THIS HAS TO BE DIVISIBLE BY NUMBER OF PHOTOS
-    num_batches_per_person = number_of_photos // batch_size
+    num_batches_per_person = total_num_photos // batch_size
+
     for i in range(number_of_people):
         print(f"\nProcessing photos of person {i + 1} out of {number_of_people}")
         all_photos.append([])
@@ -218,34 +259,28 @@ def train():
 
     print("\nCommencing model training")
 
+    alpha = 0.001
+    hidden1 = relu(2025, alpha)
+    hidden2 = relu(1024, alpha)
+    hidden3 = relu(529, alpha)
+    hidden4 = relu(121, alpha)
+    output_layer = softmax(number_of_people, alpha)
+
     run = True
     total_iteration = 0
     total_cost = 100
     while run:
-        if total_cost <= 20:
-            alpha = 0.0001
-        else:
-            alpha = 0.001
 
         for a in range(all_photos.shape[0]):
             for b in range(all_photos.shape[1]):
-                hidden1 = relu(all_photos[a][b], 2025, alpha)
-                a1 = hidden1.forward_prop()
-
-                hidden2 = relu(a1, 1024, alpha)
-                a2 = hidden2.forward_prop()
-
-                hidden3 = relu(a2, 529, alpha)
-                a3 = hidden3.forward_prop()
-
-                hidden4 = relu(a3, 121, alpha)
-                a4 = hidden4.forward_prop()
-
-                output_layer = softmax(a4, number_of_people, alpha, a)
-                output_layer.forward_prop()
-                cost, total_cost = output_layer.cost()
+                a1 = hidden1.forward_prop(all_photos[a][b])
+                a2 = hidden2.forward_prop(a1)
+                a3 = hidden3.forward_prop(a2)
+                a4 = hidden4.forward_prop(a3)
+                output_layer.forward_prop(a4)
+                cost, total_cost = output_layer.cost(a)
                 print(f"Total iteration: {total_iteration}, current person: {a + 1} out of {all_photos.shape[0]}, "
-                      f"batch number: {b + 1} out of {batch_size}, cost: {total_cost}")
+                      f"batch number: {b + 1} out of {all_photos.shape[1]}, cost: {total_cost}")
 
                 output_layer.gradient_descent()
                 current_d = hidden4.back_prop(cost)
@@ -253,7 +288,7 @@ def train():
                 current_d = hidden2.back_prop(current_d)
                 current_d = hidden1.back_prop(current_d)
 
-                if total_iteration >= 3:
+                if total_iteration >= 50:
                     run = False # Terminate as soon as cost is low enough, and that it has passed a few iterations through entire dataset, to prevent overfitting to one batch.
 
         total_iteration += 1
@@ -293,7 +328,6 @@ def predict():
                 print("Failed to capture image")
 
             cap.release()
-            cv2.destroyAllWindows()
 
 
             # Image standardization
