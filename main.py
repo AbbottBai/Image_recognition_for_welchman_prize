@@ -22,7 +22,7 @@ def take_photos():
             if ret:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 resized_gray = cv2.resize(gray, (250, 250))
-                resized_gray = resized_gray.astype(np.float32)
+                resized_gray = resized_gray.astype(np.float64)
                 # Casts the original image into float, so that overflow does not occur due to negative and decimal calculations
                 # being carried out on integers.
 
@@ -42,7 +42,7 @@ def take_photos():
 # This is also used in normal distribution!
 def standardization(img):
     img_size = img.shape
-    img = img.astype(np.float32)
+    img = img.astype(np.float64)
     sum = 0.0
     squared_sum = 0.0
     number_of_pixels = img.shape[0] * img.shape[1]
@@ -81,18 +81,16 @@ class relu():
 
     def forward_prop(self):
         start_time = int(time.time())
-        print("Starting forward propagation")
-        self.w = np.array(self.w, dtype=np.float16)
+        self.w = np.array(self.w, dtype=np.float64)
         for i in range(self.sqrt_neurons):
             for j in range(self.sqrt_neurons):
 
                 end_time = int(time.time())
-                if end_time - start_time > 20:
-                    print(f"forward propagation progress: {round((i/len(self.w[0])) * 100 + j/len(self.w[1]), 2)}%")
+                if end_time - start_time > 2:
                     start_time = end_time
 
                 for k in range(self.x.shape[0]):
-                    self.output[k][i][j] = np.sum(self.w[i][j] * self.x[k]) + self.b[i][j] # W contains corresponding shape to x, so it has to be transposed before matrix multiplication
+                    self.output[k][i][j] = np.sum(self.w[i][j] * self.x[k]) + self.b[i][j]
 
         self.output = np.array(self.output)
         return self.output
@@ -109,7 +107,7 @@ class relu():
                     for k in range(len(self.w[2])):
                         for l in range(len(self.w[3])):
                             old_w = self.w[i][j][k][l]
-                            self.w[i][j][k][l] -= self.alpha * prev_d[a] * old_w * (total_x / (self.x.shape[2] * self.x.shape[3]))
+                            self.w[i][j][k][l] -= self.alpha * prev_d[a] * old_w * (total_x / (self.x.shape[1] * self.x.shape[2]))
 
                     self.b[i][j] -= self.alpha * prev_d[a] * sum_w # Average w?
 
@@ -130,14 +128,14 @@ class softmax():
         self.alpha = alpha
 
     def forward_prop(self):
-        #std_x = [[[[0 for _ in range(self.x.shape[3])] for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
-        self.w = np.array(self.w, dtype=np.float16)
+        # std_x = [[[[0 for _ in range(self.x.shape[3])] for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
+        self.w = np.array(self.w, dtype=np.float64)
         for i in range(self.x.shape[0]):
             total_x = np.sum(self.x[i])
             total_x2 = np.sum(np.square(self.x[i]))
             # Normal standardization is implimented so the exponent doesn't get too large and uncomputable
             mean_x = total_x / (self.x.shape[1] * self.x.shape[2])
-            std_dev =  np.sqrt((total_x2 / (self.x.shape[1] * self.x.shape[2])) - np.square(mean_x))
+            std_dev = np.sqrt((total_x2 / (self.x.shape[1] * self.x.shape[2])) - np.square(mean_x))
             for a in range(self.x.shape[1]):
                 for b in range(self.x.shape[2]):
                     self.x[i][a][b] = (self.x[i][a][b] - mean_x) / std_dev
@@ -165,7 +163,10 @@ class softmax():
             self.output[i][self.y] -= 1
             # Line above is to make the gradient of the loss of the actual value negative whilst keeping the others positive
             # So it reduces the weight for wrong predictions but increases the weight for right predictions later on...
-            total_x = sum(self.x[i])
+            total_x = np.sum(self.x[i])
+            # Sum x creates a 1D array from the sum of values in each index of both lists for row and column
+            # Sum again creates a scalar from the 1D array
+            # np.sum just combines the two methods.
 
             for m in range(self.num_neurons):
                 for n in range(self.x.shape[1]):
@@ -196,7 +197,7 @@ def train():
                 except Exception as e:
                     print(f"Error processing image {j * batch_size + k} from subdirectory {i}: {e}")
 
-    all_photos = np.array(all_photos, dtype=np.float16)
+    all_photos = np.array(all_photos, dtype=np.float64)
     print(f"\nAll photos array shape: {all_photos.shape}")
     print("\nImage processing complete")
 
@@ -246,8 +247,8 @@ def train():
                 current_d = hidden1.back_prop(current_d)
                 print("hidden 1 backprop complete")
 
-                if total_cost <= 0.001:
-                    run = False # Terminate as soon as cost is low enough, not dependent on number of iterations
+                if total_cost <= 0.01 and total_iteration > 3:
+                    run = False # Terminate as soon as cost is low enough, and that it has passed a few iterations through entire dataset, to prevent overfitting to one batch.
 
         total_iteration += 1
 
@@ -265,7 +266,7 @@ def predict():
             if ret:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 resized_gray = cv2.resize(gray, (250, 250))
-                resized_gray = resized_gray.astype(np.float32)
+                resized_gray = resized_gray.astype(np.float64)
                 # Casts the original image into float, so that overflow does not occur due to negative and decimal calculations
                 # being carried out on integers.
 
