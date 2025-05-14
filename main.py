@@ -78,10 +78,11 @@ class relu():
         self.b = [[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)]
         self.output = [[[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)] for _ in range(self.x.shape[0])]
         self.alpha = alpha
+        self.w = np.array(self.w, dtype=np.float64)
+        self.b = np.array(self.b, dtype=np.float64)
 
     def forward_prop(self):
         start_time = int(time.time())
-        self.w = np.array(self.w, dtype=np.float64)
         for i in range(self.sqrt_neurons):
             for j in range(self.sqrt_neurons):
 
@@ -126,10 +127,11 @@ class softmax():
         self.output = [[0 for _ in range(self.num_neurons)] for _ in range(self.x.shape[0])]
         self.y = y
         self.alpha = alpha
+        self.w = np.array(self.w, dtype=np.float64)
+        self.b = np.array(self.b, dtype=np.float64)
 
     def forward_prop(self):
         # std_x = [[[[0 for _ in range(self.x.shape[3])] for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])]
-        self.w = np.array(self.w, dtype=np.float64)
         for i in range(self.x.shape[0]):
             total_x = np.sum(self.x[i])
             total_x2 = np.sum(np.square(self.x[i]))
@@ -175,6 +177,20 @@ class softmax():
                 self.b[m] -= self.alpha * self.output[i][m]
 
 
+# I had help from chatgpt with the save and load layer parameters functions. Apart from that everything is coded muself.
+def save_layer_parameters(layer, filename):
+    data = {f"w{i}": w for i, w in enumerate(layer.w)}
+    data.update({f"b{i}": b for i, b in enumerate(layer.b)})
+    np.savez(filename, **data)
+
+
+def load_layer_parameters(layer, filename):
+    data = np.load(filename)
+    num_layers = len([k for k in data.keys() if k.startswith("w")])
+    layer.weights = [data[f"w{i}"] for i in range(num_layers)]
+    layer.biases = [data[f"b{i}"] for i in range(num_layers)]
+
+
 def train():
     print("\nCommencing photo processing")
     all_photos = [] # This will be a 5D array, with all photos taken from different people
@@ -186,7 +202,6 @@ def train():
         print(f"\nProcessing photos of person {i + 1} out of {number_of_people}\n")
         all_photos.append([])
         for j in range(num_batches_per_person):
-            print(f"Processing batch {j + 1} out of {num_batches_per_person}")
             all_photos[i].append([]) # Appends a sublist for each batch to every person.
             for k in range(batch_size):
                 try:
@@ -216,42 +231,45 @@ def train():
             for b in range(all_photos.shape[1]):
                 hidden1 = relu(all_photos[a][b], 2025, alpha)
                 a1 = hidden1.forward_prop()
-                print("hidden layer 1 forward propagation complete")
 
                 hidden2 = relu(a1, 1024, alpha)
                 a2 = hidden2.forward_prop()
-                print("hidden layer 2 forward propagation complete")
 
                 hidden3 = relu(a2, 529, alpha)
                 a3 = hidden3.forward_prop()
-                print("hidden layer 3 forward propagation complete")
 
                 hidden4 = relu(a3, 121, alpha)
                 a4 = hidden4.forward_prop()
-                print("hidden layer 4 forward propagation complete")
 
-                output = softmax(a4, number_of_people, alpha, a)
-                output.forward_prop()
-                print("Output layer forward propagation complete")
-                cost, total_cost = output.cost()
+                output_layer = softmax(a4, number_of_people, alpha, a)
+                output_layer.forward_prop()
+                cost, total_cost = output_layer.cost()
                 print(f"Total iteration: {total_iteration}, batch number: {b}, cost: {total_cost}")
 
-                output.gradient_descent()
-                print("output layer backprop complete")
+                output_layer.gradient_descent()
                 current_d = hidden4.back_prop(cost)
-                print("hidden 4 backprop complete")
                 current_d = hidden3.back_prop(current_d)
-                print("hidden 3 backprop complete")
                 current_d = hidden2.back_prop(current_d)
-                print("hidden 2 backprop complete")
                 current_d = hidden1.back_prop(current_d)
-                print("hidden 1 backprop complete")
 
                 if total_cost <= 0.01 and total_iteration > 3:
                     run = False # Terminate as soon as cost is low enough, and that it has passed a few iterations through entire dataset, to prevent overfitting to one batch.
 
         total_iteration += 1
 
+    try:
+        print("Beginning to package and save weights and biases")
+        save_layer_parameters(hidden1, "h1.npz")
+        save_layer_parameters(hidden2, "h2.npz")
+        save_layer_parameters(hidden3, "h3.npz")
+        save_layer_parameters(hidden4, "h4.npz")
+        save_layer_parameters(output_layer, "output_layer.npz")
+        print("\nAll weights and biases saved\n")
+
+    except Exception as e:
+        print(f"Error whilst packaging weights and biases: {e}")
+
+    print("Model training complete")
 
 def predict():
     run = True
@@ -280,8 +298,66 @@ def predict():
             else:
                 print("Failed to capture image")
 
-        counter += 1
 
+            # Image standardization
+            input_array = []
+            try:
+                image = standardization(image)
+                input_array.append(image)
+                print("Image processing complete")
+            except Exception as e:
+                print(f"Error during standardization process of image: {e}")
 
-#take_photos()
-train()
+            # Initialise layers
+            alpha = 0.01
+
+            hidden1 = relu(input_array, 2025, alpha)
+            load_layer_parameters(hidden1, "h1.npz")
+            a1 = hidden1.forward_prop()
+
+            hidden2 = relu(a1, 1024, alpha)
+            load_layer_parameters(hidden2, "h2.npz")
+            a2 = hidden2.forward_prop()
+
+            hidden3 = relu(a2, 529, alpha)
+            load_layer_parameters(hidden3, "h3.npz")
+            a3 = hidden3.forward_prop()
+
+            hidden4 = relu(a3, 121, alpha)
+            load_layer_parameters(hidden4, "h4.npz")
+            a4 = hidden4.forward_prop()
+
+            output_layer = softmax(a4, number_of_people, alpha, 0)
+            load_layer_parameters(output_layer, "output_layer.npz")
+            output_layer.forward_prop()
+            result = [[],[]]
+            max_prob = 0.0
+            for i in range(output_layer.num_neurons):
+                if output_layer.output[0][i] > max_prob:
+                    result[0] = output_layer.output[0][i]
+                    result[1] = i
+                    max_prob = output_layer.output[0][i]
+
+            print(f"The model predicts that this photo belongs to person {result[1]}")
+            print(f"The likelihood that this photo belongs to person {result[1]} is {result[0] * 100}%")
+
+            counter += 1
+
+            del hidden1
+            del hidden2
+            del hidden3
+            del hidden4
+            del output_layer
+
+print("press 1 to take photos for training")
+print("press 2 to train model")
+print("press 3 to make prediction")
+selection = int(input(">"))
+if selection == 1:
+    take_photos()
+elif selection == 2:
+    train()
+elif selection == 3:
+    predict()
+else:
+    print("Invalid input")
