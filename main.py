@@ -126,22 +126,22 @@ class relu():
         return self.output
 
     def back_prop(self, prev_d): # Image by image
-        sum_weights = np.sum(self.w)
         current_d = [[0 for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])] # 2D array, one per image
         for a in range(self.x.shape[0]):
             total_x = np.sum(self.x[a]) # Sum of pixels in one image
+            image_sum_weights = np.sum(self.w)
 
             for i in range(len(self.w[0])):
                 for j in range(len(self.w[1])):
-                    sum_w = np.sum(self.w[i][j])
+                    sum_w_per_pixel = np.sum(self.w[i][j])
                     for k in range(len(self.w[2])):
                         for l in range(len(self.w[3])):
                             old_w = self.w[i][j][k][l]
                             self.w[i][j][k][l] -= self.alpha * prev_d[a] * old_w * (total_x / (self.x.shape[1] * self.x.shape[2]))
 
-                    self.b[i][j] -= self.alpha * prev_d[a] * sum_w # Average w?
+                    self.b[i][j] -= self.alpha * prev_d[a] * sum_w_per_pixel # Average w?
 
-            current_d[a] = prev_d[a] * sum_weights # Average the weights?
+            current_d[a] = prev_d[a] * (image_sum_weights / (self.x.shape[1] * self.x.shape[2] * self.num_neurons)) # Average the weights?
 
         return current_d
 
@@ -268,7 +268,6 @@ def train():
 
     run = True
     total_iteration = 0
-    total_cost = 100
     while run:
 
         for a in range(all_photos.shape[0]):
@@ -288,7 +287,7 @@ def train():
                 current_d = hidden2.back_prop(current_d)
                 current_d = hidden1.back_prop(current_d)
 
-                if total_iteration >= 50:
+                if total_iteration >= 3:
                     run = False # Terminate as soon as cost is low enough, and that it has passed a few iterations through entire dataset, to prevent overfitting to one batch.
 
         total_iteration += 1
