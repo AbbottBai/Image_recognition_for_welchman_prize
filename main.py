@@ -110,8 +110,20 @@ class relu():
         self.output = [[[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)] for _ in range(self.x.shape[0])]
         self.w = np.array(self.w, dtype=np.float64)
 
-    def forward_prop(self, x):
+    def forward_prop(self, x, require_standardizing):
+        rs = require_standardizing
         self.x = x # 0 = number of photos in batch, 1 = number of rows, 2 = number of columns
+
+        # Normal distribution is implimented to prevent stack overflow at back propagation.
+        if rs:
+            for a in range(self.x.shape[0]):
+                sum_x_per_picture = np.sum(self.x[a])
+                sum_x2_per_picture = np.sum(np.square(self.x[a]))
+                mean_x = sum_x_per_picture / (self.x.shape[1] * self.x.shape[2])
+                std_dev = np.sqrt((sum_x2_per_picture / (self.x.shape[1] * self.x.shape[2])) - np.square(mean_x))
+                for b in range(self.x.shape[1]):
+                    for c in range(self.x.shape[2]):
+                        self.x[a][b][c] = (self.x[a][b][c] - mean_x) / std_dev
 
         if self.w is None:
             self.initialize_parameters()
@@ -180,6 +192,7 @@ class softmax():
             for a in range(self.x.shape[1]):
                 for b in range(self.x.shape[2]):
                     self.x[i][a][b] = (self.x[i][a][b] - mean_x) / std_dev
+
             denominator = 0.0
             for c in range(self.num_neurons):
                 self.linear_func[i][c] = np.sum(self.w[c] * self.x[i]) + self.b[c]
@@ -272,10 +285,10 @@ def train():
 
         for a in range(all_photos.shape[0]):
             for b in range(all_photos.shape[1]):
-                a1 = hidden1.forward_prop(all_photos[a][b])
-                a2 = hidden2.forward_prop(a1)
-                a3 = hidden3.forward_prop(a2)
-                a4 = hidden4.forward_prop(a3)
+                a1 = hidden1.forward_prop(all_photos[a][b], False)
+                a2 = hidden2.forward_prop(a1, True)
+                a3 = hidden3.forward_prop(a2, True)
+                a4 = hidden4.forward_prop(a3, True)
                 output_layer.forward_prop(a4)
                 cost, total_cost = output_layer.cost(a)
                 print(f"Total iteration: {total_iteration}, current person: {a + 1} out of {all_photos.shape[0]}, "
@@ -288,7 +301,7 @@ def train():
                 current_d = hidden1.back_prop(current_d)
 
                 if total_iteration >= 3:
-                    run = False # Terminate as soon as cost is low enough, and that it has passed a few iterations through entire dataset, to prevent overfitting to one batch.
+                    run = False
 
         total_iteration += 1
 
