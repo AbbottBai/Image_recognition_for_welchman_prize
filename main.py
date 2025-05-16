@@ -4,9 +4,9 @@ import os
 import random
 import albumentations as A
 
-number_of_photos = 100 # Number of photos that the camera actually takes
+number_of_photos = 400 # Number of photos that the camera actually takes
 #IMPORTANT: augmented_photos + 1 must be divisible by batch size!!!
-augmented_photos = 9 # Number of photos that are augmented per photo taken by the camera
+augmented_photos = 2 # Number of photos that are augmented per photo taken by the camera
 total_num_photos = number_of_photos * augmented_photos + number_of_photos
 
 number_of_people = 3
@@ -147,14 +147,12 @@ class relu():
             w_coefficient = self.alpha * prev_d[a] * (total_x / (self.x.shape[1] * self.x.shape[2]))
             b_coefficient = self.alpha * prev_d[a]
 
+            # Moved W outside of nested loop. Vectorized.
+            self.w -= w_coefficient * self.w
+
             for i in range(self.w.shape[0]):
                 for j in range(self.w.shape[1]):
                     sum_w_per_pixel = np.sum(self.w[i][j])
-                    for k in range(self.w.shape[2]):
-                        for l in range(self.w.shape[3]):
-                            old_w = self.w[i][j][k][l]
-                            self.w[i][j][k][l] -= w_coefficient * old_w
-
                     self.b[i][j] -= b_coefficient * sum_w_per_pixel # Average w?
 
             current_d[a] = prev_d[a] * (image_sum_weights / (self.x.shape[1] * self.x.shape[2] * self.num_neurons)) # Average the weights?
@@ -255,7 +253,7 @@ def train():
     all_photos = [] # This will be a 5D array, with all photos taken from different people
     # 0 = number of person, 1 = number of batches, 2 = number of photos in batch, 3 = number of rows, 4 = number of columns
 
-    batch_size = 20 # WARNING: THIS HAS TO BE DIVISIBLE BY NUMBER OF PHOTOS
+    batch_size = 60 # WARNING: THIS HAS TO BE DIVISIBLE BY TOTAL NUMBER OF PHOTOS
     num_batches_per_person = total_num_photos // batch_size
 
     for i in range(number_of_people):
@@ -303,7 +301,7 @@ def train():
                 current_d = hidden2.back_prop(current_d)
                 current_d = hidden1.back_prop(current_d)
 
-                if total_iteration >= 19:
+                if total_iteration >= 100:
                     run = False
 
         total_iteration += 1
