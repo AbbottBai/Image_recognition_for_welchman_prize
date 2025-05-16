@@ -6,7 +6,7 @@ import albumentations as A
 
 number_of_photos = 100 # Number of photos that the camera actually takes
 #IMPORTANT: augmented_photos + 1 must be divisible by batch size!!!
-augmented_photos = 4 # Number of photos that are augmented per photo taken by the camera
+augmented_photos = 9 # Number of photos that are augmented per photo taken by the camera
 total_num_photos = number_of_photos * augmented_photos + number_of_photos
 
 number_of_people = 3
@@ -32,7 +32,7 @@ def take_photos():
             ret, frame = cap.read()  # Capture a frame
             if ret:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                resized_gray = cv2.resize(gray, (250, 250))
+                resized_gray = cv2.resize(gray, (64, 64))
                 resized_gray = resized_gray.astype(np.float64)
                 #resized_gray = np.uint8(resized_gray)
                 # Casts the original image into float, so that overflow does not occur due to negative and decimal calculations
@@ -48,7 +48,7 @@ def take_photos():
                 for j in range(augmented_photos):
                     augmented = transform(image=frame)["image"]
                     gray_augmented = cv2.cvtColor(augmented, cv2.COLOR_BGR2GRAY)
-                    resized_augmented = cv2.resize(gray_augmented, (250, 250))
+                    resized_augmented = cv2.resize(gray_augmented, (64, 64))
                     resized_augmented = resized_augmented.astype(np.float64)
 
                     augmented_filename = os.path.join(output_dir, f"image{current_photo_index}.png")
@@ -143,15 +143,19 @@ class relu():
             total_x = np.sum(self.x[a]) # Sum of pixels in one image
             image_sum_weights = np.sum(self.w)
 
+            #w and b coefficient are calculated outside loop so that the values that are not changing do not have to be recalculated.
+            w_coefficient = self.alpha * prev_d[a] * (total_x / (self.x.shape[1] * self.x.shape[2]))
+            b_coefficient = self.alpha * prev_d[a]
+
             for i in range(len(self.w[0])):
                 for j in range(len(self.w[1])):
                     sum_w_per_pixel = np.sum(self.w[i][j])
                     for k in range(len(self.w[2])):
                         for l in range(len(self.w[3])):
                             old_w = self.w[i][j][k][l]
-                            self.w[i][j][k][l] -= self.alpha * prev_d[a] * old_w * (total_x / (self.x.shape[1] * self.x.shape[2]))
+                            self.w[i][j][k][l] -= w_coefficient * old_w
 
-                    self.b[i][j] -= self.alpha * prev_d[a] * sum_w_per_pixel # Average w?
+                    self.b[i][j] -= b_coefficient * sum_w_per_pixel # Average w?
 
             current_d[a] = prev_d[a] * (image_sum_weights / (self.x.shape[1] * self.x.shape[2] * self.num_neurons)) # Average the weights?
 
@@ -222,11 +226,13 @@ class softmax():
             # Sum x creates a 1D array from the sum of values in each index of both lists for row and column
             # Sum again creates a scalar from the 1D array
             # np.sum just combines the two methods.
+            w_coefficient = self.alpha * (total_x / (self.x.shape[1] * self.x.shape[2]))
 
             for m in range(self.num_neurons):
+                w_cost = w_coefficient * self.output[i][m]
                 for n in range(self.x.shape[1]):
                     for p in range(self.x.shape[2]):
-                        self.w[m][n][p] -= self.alpha * self.output[i][m] * (total_x / (self.x.shape[1] * self.x.shape[2]))
+                        self.w[m][n][p] -= w_cost
                 self.b[m] -= self.alpha * self.output[i][m]
 
 
@@ -297,7 +303,7 @@ def train():
                 current_d = hidden2.back_prop(current_d)
                 current_d = hidden1.back_prop(current_d)
 
-                if total_iteration >= 3:
+                if total_iteration >= 19:
                     run = False
 
         total_iteration += 1
@@ -328,7 +334,7 @@ def predict():
             ret, frame = cap.read()
             if ret:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                resized_gray = cv2.resize(gray, (250, 250))
+                resized_gray = cv2.resize(gray, (64, 64))
                 resized_gray = resized_gray.astype(np.float64)
                 # Casts the original image into float, so that overflow does not occur due to negative and decimal calculations
                 # being carried out on integers.
