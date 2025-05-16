@@ -147,11 +147,11 @@ class relu():
             w_coefficient = self.alpha * prev_d[a] * (total_x / (self.x.shape[1] * self.x.shape[2]))
             b_coefficient = self.alpha * prev_d[a]
 
-            for i in range(len(self.w[0])):
-                for j in range(len(self.w[1])):
+            for i in range(self.w.shape[0]):
+                for j in range(self.w.shape[1]):
                     sum_w_per_pixel = np.sum(self.w[i][j])
-                    for k in range(len(self.w[2])):
-                        for l in range(len(self.w[3])):
+                    for k in range(self.w.shape[2]):
+                        for l in range(self.w.shape[3]):
                             old_w = self.w[i][j][k][l]
                             self.w[i][j][k][l] -= w_coefficient * old_w
 
@@ -358,7 +358,7 @@ def predict():
             print("\nForward propagation commencing...")
 
             # Initialise layers
-            alpha = 0.01
+            alpha = 0.001
 
             hidden1 = relu(1024, alpha)
             hidden2 = relu(529, alpha)
