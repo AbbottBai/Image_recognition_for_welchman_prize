@@ -4,7 +4,7 @@ import os
 import random
 import albumentations as A
 
-number_of_photos = 200 # Number of photos that the camera actually takes
+number_of_photos = 100 # Number of photos that the camera actually takes
 #IMPORTANT: augmented_photos + 1 must be divisible by batch size!!!
 augmented_photos = 4 # Number of photos that are augmented per photo taken by the camera
 total_num_photos = number_of_photos * augmented_photos + number_of_photos
@@ -107,12 +107,12 @@ class relu():
     def initialize_parameters(self):
         # w is a 4D arrays, one w per pixel. One neuron for all pixels.
         self.w = [[[[random.uniform(-0.4, 0.4) for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)]
-        self.output = [[[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)] for _ in range(self.x.shape[0])]
         self.w = np.array(self.w, dtype=np.float64)
 
     def forward_prop(self, x, require_standardizing):
         rs = require_standardizing
         self.x = x # 0 = number of photos in batch, 1 = number of rows, 2 = number of columns
+        self.output = [[[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)] for _ in range(self.x.shape[0])]
 
         # Normal distribution is implimented to prevent stack overflow at back propagation.
         if rs:
@@ -173,12 +173,12 @@ class softmax():
     def initialize_parameters(self):
         # w is a 3D array which contains one w per pixel for all pixels per neuron.
         self.w = [[[random.uniform(-0.4, 0.4) for _ in range(self.x.shape[2])] for _ in range(self.x.shape[1])] for _ in range(self.num_neurons)]
-        self.linear_func = [[0 for _ in range(self.num_neurons)] for _ in range(self.x.shape[0])]
-        self.output = [[0 for _ in range(self.num_neurons)] for _ in range(self.x.shape[0])]
         self.w = np.array(self.w, dtype=np.float64)
 
     def forward_prop(self, x):
         self.x = x  # 0 = number of photos in batch, 1 = number of rows, 2 = number of columns
+        self.linear_func = [[0 for _ in range(self.num_neurons)] for _ in range(self.x.shape[0])]
+        self.output = [[0 for _ in range(self.num_neurons)] for _ in range(self.x.shape[0])]
 
         if self.w is None: # Checks if parameters has been defined yet.
             self.initialize_parameters()
@@ -273,10 +273,9 @@ def train():
     print("\nCommencing model training")
 
     alpha = 0.001
-    hidden1 = relu(2025, alpha)
-    hidden2 = relu(1024, alpha)
-    hidden3 = relu(529, alpha)
-    hidden4 = relu(121, alpha)
+    hidden1 = relu(1024, alpha)
+    hidden2 = relu(529, alpha)
+    hidden3 = relu(121, alpha)
     output_layer = softmax(number_of_people, alpha)
 
     run = True
@@ -288,15 +287,13 @@ def train():
                 a1 = hidden1.forward_prop(all_photos[a][b], False)
                 a2 = hidden2.forward_prop(a1, True)
                 a3 = hidden3.forward_prop(a2, True)
-                a4 = hidden4.forward_prop(a3, True)
-                output_layer.forward_prop(a4)
+                output_layer.forward_prop(a3)
                 cost, total_cost = output_layer.cost(a)
                 print(f"Total iteration: {total_iteration}, current person: {a + 1} out of {all_photos.shape[0]}, "
                       f"batch number: {b + 1} out of {all_photos.shape[1]}, cost: {total_cost}")
 
                 output_layer.gradient_descent()
-                current_d = hidden4.back_prop(cost)
-                current_d = hidden3.back_prop(current_d)
+                current_d = hidden3.back_prop(cost)
                 current_d = hidden2.back_prop(current_d)
                 current_d = hidden1.back_prop(current_d)
 
@@ -310,7 +307,6 @@ def train():
         save_layer_parameters(hidden1, "h1.npz")
         save_layer_parameters(hidden2, "h2.npz")
         save_layer_parameters(hidden3, "h3.npz")
-        save_layer_parameters(hidden4, "h4.npz")
         save_layer_parameters(output_layer, "output_layer.npz")
         print("\nAll weights and biases saved\n")
 
@@ -318,6 +314,7 @@ def train():
         print(f"Error whilst packaging weights and biases: {e}")
 
     print("Model training complete")
+
 
 def predict():
     run = True
@@ -357,26 +354,21 @@ def predict():
             # Initialise layers
             alpha = 0.01
 
-            hidden1 = relu(input_array, 2025, alpha)
+            hidden1 = relu(1024, alpha)
+            hidden2 = relu(529, alpha)
+            hidden3 = relu(121, alpha)
+            output_layer = softmax(number_of_people, alpha)
+
             load_layer_parameters(hidden1, "h1.npz")
-            print(hidden1.w[0][0][0][0])
-            a1 = hidden1.forward_prop()
-
-            hidden2 = relu(a1, 1024, alpha)
             load_layer_parameters(hidden2, "h2.npz")
-            a2 = hidden2.forward_prop()
-
-            hidden3 = relu(a2, 529, alpha)
             load_layer_parameters(hidden3, "h3.npz")
-            a3 = hidden3.forward_prop()
-
-            hidden4 = relu(a3, 121, alpha)
-            load_layer_parameters(hidden4, "h4.npz")
-            a4 = hidden4.forward_prop()
-
-            output_layer = softmax(a4, number_of_people, alpha, 0)
             load_layer_parameters(output_layer, "output_layer.npz")
-            output_layer.forward_prop()
+
+            a1 = hidden1.forward_prop(input_array, False)
+            a2 = hidden2.forward_prop(a1, True)
+            a3 = hidden3.forward_prop(a2, True)
+            output_layer.forward_prop(a3)
+
             result = [[],[]]
             max_prob = 0.0
             for i in range(output_layer.num_neurons):
@@ -393,7 +385,6 @@ def predict():
             del hidden1
             del hidden2
             del hidden3
-            del hidden4
             del output_layer
 
 print("press 1 to take photos for training")
