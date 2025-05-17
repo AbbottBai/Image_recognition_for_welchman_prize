@@ -79,7 +79,7 @@ def standardization(img):
 
 
 class relu():
-    def __init__(self, num_neurons, alpha):
+    def __init__(self, num_neurons):
         self.x = None # Placeholder
         self.num_neurons = num_neurons
         self.sqrt_neurons = int(np.sqrt(self.num_neurons))
@@ -90,7 +90,7 @@ class relu():
         # b is a 2D array, one b per neuron.
         self.b = [[0 for _ in range(self.sqrt_neurons)] for _ in range(self.sqrt_neurons)]
         self.output = None
-        self.alpha = alpha
+        self.alpha = float()
         self.b = np.array(self.b, dtype=np.float64)
 
     def initialize_parameters(self):
@@ -126,8 +126,11 @@ class relu():
         self.output = np.array(self.output)
         return self.output
 
-    def back_prop(self, prev_d): # Image by image
+    def back_prop(self, prev_d, alpha): # Image by image
+        self.alpha = alpha
+
         current_d = [[0 for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])] # 2D array, one per image
+
         for a in range(self.x.shape[0]):
             total_x = np.sum(self.x[a]) # Sum of pixels in one image
             image_sum_weights = np.sum(self.w)
@@ -149,7 +152,7 @@ class relu():
         return current_d
 
 class softmax():
-    def __init__(self, num_neurons, alpha):
+    def __init__(self, num_neurons):
         self.x = None # placeholder
         self.num_neurons = num_neurons
         # w is a 3D array which contains one w per pixel for all pixels per neuron.
@@ -158,7 +161,7 @@ class softmax():
         self.linear_func = None
         self.output = None
         self.y = None # Placeholder
-        self.alpha = alpha
+        self.alpha = float()
         self.b = np.array(self.b, dtype=np.float64)
 
     def initialize_parameters(self):
@@ -204,7 +207,8 @@ class softmax():
 
         return cost, total_cost
 
-    def gradient_descent(self): # Image by image
+    def gradient_descent(self, alpha): # Image by image
+        self.alpha = alpha
         for i in range(self.x.shape[0]):
             self.output[i][self.y[i]] -= 1
             # Line above is to make the gradient of the loss of the actual value negative whilst keeping the others positive
@@ -241,17 +245,22 @@ def train():
     batch_size = 60 # WARNING: THIS HAS TO BE DIVISIBLE BY TOTAL NUMBER OF PHOTOS
 
     alpha = 0.001
-    hidden1 = relu(1024, alpha)
-    hidden2 = relu(529, alpha)
-    hidden3 = relu(121, alpha)
-    output_layer = softmax(number_of_people, alpha)
+    hidden1 = relu(1024)
+    hidden2 = relu(529)
+    hidden3 = relu(121)
+    output_layer = softmax(number_of_people)
 
     run = True
+
     current_iteration = 1
     total_num_batches = (total_num_photos * number_of_people) // batch_size  # Number of batches for all people
     num_iterations = 100
-    total_num_iterations = num_iterations * total_num_batches
     current_batch_number = 1
+
+    current_iteration_cost = 0
+    prev_five = []
+    current_five = []
+
     while run:
         current_batch = []
         batch_y = [] # One value per image for the batch. 1D array
@@ -275,21 +284,43 @@ def train():
         output_layer.forward_prop(a3)
 
         cost, total_cost = output_layer.cost(batch_y)
+        current_iteration_cost += total_cost
 
-        output_layer.gradient_descent()
-        current_d = hidden3.back_prop(cost)
-        current_d = hidden2.back_prop(current_d)
-        current_d = hidden1.back_prop(current_d)
+        output_layer.gradient_descent(alpha)
+        current_d = hidden3.back_prop(cost, alpha)
+        current_d = hidden2.back_prop(current_d, alpha)
+        current_d = hidden1.back_prop(current_d, alpha)
 
 
         print(f"Total iteration: {current_iteration} out of {num_iterations}, batch number: {current_batch_number} out of {total_num_batches}, cost: {total_cost}")
 
         current_batch_number += 1
         if current_batch_number > total_num_batches:
+
+            current_iteration_cost = current_iteration_cost / current_batch_number
+            current_five.append(current_iteration_cost)
+
+            if len(current_five) >= 5:
+                current_mean = np.mean(current_five)
+
+                if len(prev_five) == 0:
+                    past_mean = 0
+                else:
+                    past_mean = np.mean(prev_five)
+
+                # abs returns the magnitude of a value
+                if abs(current_mean - past_mean) <= 0.1:
+                    alpha = alpha * 0.1 # Reduces alpha by a factor of 10, to prevent plateauing of the cost.
+                    print(f"Cost has plateaued, alpha has been reduced by a factor of 10 to {alpha}.")
+
+                prev_five = current_five
+                current_five = []
+
             current_iteration += 1
             current_batch_number = 1
+            current_iteration_cost = 0
 
-        if current_iteration > total_num_iterations:
+        if current_iteration > num_iterations:
             run = False
 
 
@@ -343,12 +374,10 @@ def predict():
             print("\nForward propagation commencing...")
 
             # Initialise layers
-            alpha = 0.001
-
-            hidden1 = relu(1024, alpha)
-            hidden2 = relu(529, alpha)
-            hidden3 = relu(121, alpha)
-            output_layer = softmax(number_of_people, alpha)
+            hidden1 = relu(1024)
+            hidden2 = relu(529)
+            hidden3 = relu(121)
+            output_layer = softmax(number_of_people)
 
             load_layer_parameters(hidden1, "h1.npz")
             load_layer_parameters(hidden2, "h2.npz")
