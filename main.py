@@ -65,28 +65,17 @@ def take_photos():
 
 # This is also used in normal distribution!
 def standardization(img):
-    img_size = img.shape
     img = img.astype(np.float64)
-    sum = 0.0
-    squared_sum = 0.0
     number_of_pixels = img.shape[0] * img.shape[1]
-    # Define an empty 2D matrix with the same shape as the original, unstandardized greyscale image
-    std_img = np.zeros_like(img)
 
-    for i in range (img_size[0]):
-        for j in range (img_size[1]):
-            sum += img[i][j]
-            squared_sum += np.square(img[i][j])
+    total_x2 = np.sum(np.square(img))
+    mean = np.sum(img) / number_of_pixels
 
-    mean = sum / number_of_pixels
-    std_deviation = np.sqrt((squared_sum / number_of_pixels) - np.square(mean))
+    std_deviation = np.sqrt((total_x2 / number_of_pixels) - np.square(mean))
 
-    for i in range (img_size[0]):
-        for j in range (img_size[1]):
-            # This is where the actual normalisation occurs
-            std_img[i][j] = (img[i][j] - mean) / std_deviation
+    img = (img - mean) / std_deviation
 
-    return std_img
+    return img
 
 
 class relu():
@@ -209,7 +198,7 @@ class softmax():
         self.y = y
         cost = [0 for _ in range(self.x.shape[0])] # 1D array, one per image
         for i in range(self.x.shape[0]):
-            cost[i] = -(np.log(self.output[i][self.y]))
+            cost[i] = -(np.log(self.output[i][self.y[i]]))
 
         total_cost = np.sum(cost) / self.x.shape[0]
 
@@ -217,7 +206,7 @@ class softmax():
 
     def gradient_descent(self): # Image by image
         for i in range(self.x.shape[0]):
-            self.output[i][self.y] -= 1
+            self.output[i][self.y[i]] -= 1
             # Line above is to make the gradient of the loss of the actual value negative whilst keeping the others positive
             # So it reduces the weight for wrong predictions but increases the weight for right predictions later on...
             total_x = np.sum(self.x[i])
@@ -228,13 +217,11 @@ class softmax():
 
             for m in range(self.num_neurons):
                 w_cost = w_coefficient * self.output[i][m]
-                for n in range(self.x.shape[1]):
-                    for p in range(self.x.shape[2]):
-                        self.w[m][n][p] -= w_cost
+                self.w[m] -= w_cost
                 self.b[m] -= self.alpha * self.output[i][m]
 
 
-# I had help from chatgpt with the save and load layer parameters functions. Apart from that everything is coded muself.
+# I had help from chatgpt with the save and load layer parameters functions. Apart from that everything is coded myself.
 def save_layer_parameters(layer, filename):
     data = {f"w{i}": w for i, w in enumerate(layer.w)}
     data.update({f"b{i}": b for i, b in enumerate(layer.b)})
@@ -249,32 +236,9 @@ def load_layer_parameters(layer, filename):
 
 
 def train():
-    print("\nCommencing photo processing")
-    all_photos = [] # This will be a 5D array, with all photos taken from different people
-    # 0 = number of person, 1 = number of batches, 2 = number of photos in batch, 3 = number of rows, 4 = number of columns
+    print("\nCommencing model training")
 
     batch_size = 60 # WARNING: THIS HAS TO BE DIVISIBLE BY TOTAL NUMBER OF PHOTOS
-    num_batches_per_person = total_num_photos // batch_size
-
-    for i in range(number_of_people):
-        print(f"\nProcessing photos of person {i + 1} out of {number_of_people}")
-        all_photos.append([])
-        for j in range(num_batches_per_person):
-            all_photos[i].append([]) # Appends a sublist for each batch to every person.
-            for k in range(batch_size):
-                try:
-                    image_path = os.path.join(str(i), f"image{j * batch_size + k}.png")
-                    img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
-                    img = standardization(img)
-                    all_photos[i][j].append(img)
-                except Exception as e:
-                    print(f"Error processing image {j * batch_size + k} from subdirectory {i}: {e}")
-
-    all_photos = np.array(all_photos, dtype=np.float64)
-    print(f"\nAll photos array shape: {all_photos.shape}")
-    print("\nImage processing complete")
-
-    print("\nCommencing model training")
 
     alpha = 0.001
     hidden1 = relu(1024, alpha)
@@ -283,28 +247,51 @@ def train():
     output_layer = softmax(number_of_people, alpha)
 
     run = True
-    total_iteration = 0
+    current_iteration = 1
+    total_num_batches = (total_num_photos * number_of_people) // batch_size  # Number of batches for all people
+    num_iterations = 100
+    total_num_iterations = num_iterations * total_num_batches
+    current_batch_number = 1
     while run:
+        current_batch = []
+        batch_y = [] # One value per image for the batch. 1D array
+        for i in range(batch_size):
+            try:
+                current_person = random.randint(0, number_of_people-1)
+                current_photo = random.randint(0, total_num_photos-1)
+                batch_y.append(current_person)
+                image_path = os.path.join(str(current_person), f"image{current_photo}.png")
+                img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+                img = standardization(img)
+                current_batch.append(img)
+            except Exception as e:
+                print(f"Error processing image: {e}")
 
-        for a in range(all_photos.shape[0]):
-            for b in range(all_photos.shape[1]):
-                a1 = hidden1.forward_prop(all_photos[a][b], False)
-                a2 = hidden2.forward_prop(a1, True)
-                a3 = hidden3.forward_prop(a2, True)
-                output_layer.forward_prop(a3)
-                cost, total_cost = output_layer.cost(a)
-                print(f"Total iteration: {total_iteration}, current person: {a + 1} out of {all_photos.shape[0]}, "
-                      f"batch number: {b + 1} out of {all_photos.shape[1]}, cost: {total_cost}")
+        current_batch = np.array(current_batch, dtype=np.float64)
 
-                output_layer.gradient_descent()
-                current_d = hidden3.back_prop(cost)
-                current_d = hidden2.back_prop(current_d)
-                current_d = hidden1.back_prop(current_d)
+        a1 = hidden1.forward_prop(current_batch, False)
+        a2 = hidden2.forward_prop(a1, True)
+        a3 = hidden3.forward_prop(a2, True)
+        output_layer.forward_prop(a3)
 
-                if total_iteration >= 100:
-                    run = False
+        cost, total_cost = output_layer.cost(batch_y)
 
-        total_iteration += 1
+        output_layer.gradient_descent()
+        current_d = hidden3.back_prop(cost)
+        current_d = hidden2.back_prop(current_d)
+        current_d = hidden1.back_prop(current_d)
+
+
+        print(f"Total iteration: {current_iteration} out of {num_iterations}, batch number: {current_batch_number} out of {total_num_batches}, cost: {total_cost}")
+
+        current_batch_number += 1
+        if current_batch_number > total_num_batches:
+            current_iteration += 1
+            current_batch_number = 1
+
+        if current_iteration > total_num_iterations:
+            run = False
+
 
     try:
         print("Beginning to package and save weights and biases")
