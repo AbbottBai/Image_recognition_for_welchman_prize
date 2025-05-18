@@ -32,7 +32,7 @@ def take_photos():
             ret, frame = cap.read()  # Capture a frame
             if ret:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                resized_gray = cv2.resize(gray, (64, 64))
+                resized_gray = cv2.resize(gray, (128, 128))
                 resized_gray = resized_gray.astype(np.float64)
                 #resized_gray = np.uint8(resized_gray)
                 # Casts the original image into float, so that overflow does not occur due to negative and decimal calculations
@@ -48,7 +48,7 @@ def take_photos():
                 for j in range(augmented_photos):
                     augmented = transform(image=frame)["image"]
                     gray_augmented = cv2.cvtColor(augmented, cv2.COLOR_BGR2GRAY)
-                    resized_augmented = cv2.resize(gray_augmented, (64, 64))
+                    resized_augmented = cv2.resize(gray_augmented, (128, 128))
                     resized_augmented = resized_augmented.astype(np.float64)
 
                     augmented_filename = os.path.join(output_dir, f"image{current_photo_index}.png")
@@ -254,7 +254,7 @@ def train():
 
     current_iteration = 1
     total_num_batches = (total_num_photos * number_of_people) // batch_size  # Number of batches for all people
-    num_iterations = 100
+    num_iterations = 10
     current_batch_number = 1
 
     current_iteration_cost = 0
@@ -309,7 +309,7 @@ def train():
                     past_mean = np.mean(prev_five)
 
                 # abs returns the magnitude of a value
-                if abs(current_mean - past_mean) <= 0.1:
+                if abs(current_mean - past_mean) <= 0.05 and alpha > 0.0001:
                     alpha = alpha * 0.1 # Reduces alpha by a factor of 10, to prevent plateauing of the cost.
                     print(f"Cost has plateaued, alpha has been reduced by a factor of 10 to {alpha}.")
 
@@ -350,7 +350,7 @@ def predict():
             ret, frame = cap.read()
             if ret:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                resized_gray = cv2.resize(gray, (64, 64))
+                resized_gray = cv2.resize(gray, (128, 128))
                 resized_gray = resized_gray.astype(np.float64)
                 # Casts the original image into float, so that overflow does not occur due to negative and decimal calculations
                 # being carried out on integers.
@@ -373,7 +373,7 @@ def predict():
 
             print("\nForward propagation commencing...")
 
-            # Initialise layers
+            # Initialise layer
             hidden1 = relu(1024)
             hidden2 = relu(529)
             hidden3 = relu(121)
