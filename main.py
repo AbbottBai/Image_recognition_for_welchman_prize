@@ -121,7 +121,12 @@ class relu():
             for j in range(self.sqrt_neurons):
 
                 for k in range(self.x.shape[0]):
-                    self.output[k][i][j] = np.sum(self.w[i][j] * self.x[k]) + self.b[i][j]
+                    linear_func = np.sum(self.w[i][j] * self.x[k]) + self.b[i][j]
+                    # Relu begins here
+                    if linear_func > 0:
+                        self.output[k][i][j] = linear_func
+                    else:
+                        self.output[k][i][j] = 0
 
         self.output = np.array(self.output)
         return self.output
@@ -132,22 +137,27 @@ class relu():
         current_d = [[0 for _ in range(self.x.shape[1])] for _ in range(self.x.shape[0])] # 2D array, one per image
 
         for a in range(self.x.shape[0]):
-            total_x = np.sum(self.x[a]) # Sum of pixels in one image
-            image_sum_weights = np.sum(self.w)
 
             #w and b coefficient are calculated outside loop so that the values that are not changing do not have to be recalculated.
-            w_coefficient = self.alpha * prev_d[a] * (total_x / (self.x.shape[1] * self.x.shape[2]))
+            w_coefficient = self.alpha * prev_d[a] * self.x[a] # This creates a 2D array, one per pixel, but also one per w.
             b_coefficient = self.alpha * prev_d[a]
 
+
             # Moved W outside of nested loop. Vectorized.
-            self.w -= w_coefficient * self.w
+
+            # The 4D and 2D array shapes are different.
+            # So it will match the 2D array with the 2 inner most lists, which are also one per pixel.
+            self.w -= w_coefficient[None, None, :, :] * self.w
+            #This is so each w only updates by multiplying by the x that it is responsible for, instead of all x values.
 
             for i in range(self.w.shape[0]):
                 for j in range(self.w.shape[1]):
-                    sum_w_per_pixel = np.sum(self.w[i][j])
-                    self.b[i][j] -= b_coefficient * sum_w_per_pixel # Average w?
+                    self.b[i][j] -= b_coefficient * np.sum(self.w[i][j]) # Average the sum w?
 
-            current_d[a] = prev_d[a] * (image_sum_weights / (self.x.shape[1] * self.x.shape[2] * self.num_neurons)) # Average the weights?
+            current_d[a] = prev_d[a] * (np.sum(self.w) / (self.x.shape[1] * self.x.shape[2] * self.num_neurons))
+            # The average is used for weights because image_sum_weights itself is too large in value, and caused overflow.
+
+        current_d = np.array(current_d, dtype=np.float64)
 
         return current_d
 
@@ -213,11 +223,7 @@ class softmax():
             self.output[i][self.y[i]] -= 1
             # Line above is to make the gradient of the loss of the actual value negative whilst keeping the others positive
             # So it reduces the weight for wrong predictions but increases the weight for right predictions later on...
-            total_x = np.sum(self.x[i])
-            # Sum x creates a 1D array from the sum of values in each index of both lists for row and column
-            # Sum again creates a scalar from the 1D array
-            # np.sum just combines the two methods.
-            w_coefficient = self.alpha * (total_x / (self.x.shape[1] * self.x.shape[2]))
+            w_coefficient = self.alpha * self.x[i] # This creates a 2D array, one per pixel, but also one per w.
 
             for m in range(self.num_neurons):
                 w_cost = w_coefficient * self.output[i][m]
@@ -244,7 +250,7 @@ def train():
 
     batch_size = 60 # WARNING: THIS HAS TO BE DIVISIBLE BY TOTAL NUMBER OF PHOTOS
 
-    alpha = 0.001
+    alpha = 0.0001
     hidden1 = relu(1024)
     hidden2 = relu(529)
     hidden3 = relu(121)
@@ -309,7 +315,7 @@ def train():
                     past_mean = np.mean(prev_five)
 
                 # abs returns the magnitude of a value
-                if abs(current_mean - past_mean) <= 0.05 and alpha > 0.0001:
+                if abs(current_mean - past_mean) <= 0.05 and alpha > 0.000001:
                     alpha = alpha * 0.1 # Reduces alpha by a factor of 10, to prevent plateauing of the cost.
                     print(f"Cost has plateaued, alpha has been reduced by a factor of 10 to {alpha}.")
 
@@ -326,10 +332,10 @@ def train():
 
     try:
         print("Beginning to package and save weights and biases")
-        save_layer_parameters(hidden1, "h1.npz")
-        save_layer_parameters(hidden2, "h2.npz")
-        save_layer_parameters(hidden3, "h3.npz")
-        save_layer_parameters(output_layer, "output_layer.npz")
+        save_layer_parameters(hidden1, "laptop and bottle/h1.npz")
+        save_layer_parameters(hidden2, "laptop and bottle/h2.npz")
+        save_layer_parameters(hidden3, "laptop and bottle/h3.npz")
+        save_layer_parameters(output_layer, "laptop and bottle/output_layer.npz")
         print("\nAll weights and biases saved\n")
 
     except Exception as e:
@@ -379,10 +385,10 @@ def predict():
             hidden3 = relu(121)
             output_layer = softmax(number_of_people)
 
-            load_layer_parameters(hidden1, "h1.npz")
-            load_layer_parameters(hidden2, "h2.npz")
-            load_layer_parameters(hidden3, "h3.npz")
-            load_layer_parameters(output_layer, "output_layer.npz")
+            load_layer_parameters(hidden1, "laptop and bottle/h1.npz")
+            load_layer_parameters(hidden2, "laptop and bottle/h2.npz")
+            load_layer_parameters(hidden3, "laptop and bottle/h3.npz")
+            load_layer_parameters(output_layer, "laptop and bottle/output_layer.npz")
 
             a1 = hidden1.forward_prop(input_array, False)
             a2 = hidden2.forward_prop(a1, True)
