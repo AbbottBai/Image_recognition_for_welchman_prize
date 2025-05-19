@@ -260,7 +260,7 @@ def train():
 
     current_iteration = 1
     total_num_batches = (total_num_photos * number_of_people) // batch_size  # Number of batches for all people
-    num_iterations = 10
+    num_iterations = 50
     current_batch_number = 1
 
     current_iteration_cost = 0
